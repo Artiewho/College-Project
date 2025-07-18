@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        .search-container {
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        .typing-text {
+            height: 40px;
+            margin-bottom: 30px;
+            font-size: 24px;
+            color: #333;
+            font-weight: 500;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .typing-text::after {
+            content: '|';
+            margin-left: 2px;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        body.dark-mode .search-input-container {
+            background: linear-gradient(90deg, #00a1ff, #8f00ff, #ff69b4, #00a1ff);
+            background-size: 300% 100%;
+            animation: gradient 6s ease infinite;
+        }
+
+        .search-input-container {
+            position: relative;
+            padding: 3px;
+            border-radius: 30px;
+            background: linear-gradient(90deg, #FFA500, #FFD700, #FF69B4, #FFA500);
+            background-size: 300% 100%;
+            animation: gradient 6s ease infinite;
+        }
+
+        .search-input {
+            display: block;
+            width: 100%;
+            padding: 16px 24px;
+            font-size: 18px;
+            border: none;
+            border-radius: 28px;
+            outline: none;
+            background-color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .search-input:focus {
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .upload-button {
+            position: absolute;
+            left: 24px;
+            bottom: -45px;
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 14px;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .upload-button:hover {
+            background-color: #f8f8f8;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .upload-button svg {
+            width: 16px;
+            height: 16px;
+            margin-right: 5px;
+            fill: #666;
+        }
+
+        .upload-button input[type="file"] {
+            display: none;
+        }
+
+        .university-select-container {
+            position: absolute;
+            left: 150px;
+            bottom: -45px;
+            width: 320px;
+        }
+
+        .university-select {
+            position: absolute;
+            left: 150px;
+            bottom: -200px;
+            padding: 8px 16px;
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            background-color: white;
+            color: #333;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            width: 320px;
+            max-height: 40px;
+            overflow-y: auto;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url('data:image/svg+xml;utf8,<svg fill="black" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+        }
+
+        .university-select:hover {
+            background-color: #f8f8f8;
+        }
+
+        .dark-mode-toggle {
+            position: absolute;
+            left: 490px;
+            bottom: -45px;
+            width: 60px;
+            height: 30px;
+            background-color: #ddd;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            padding: 0 4px;
+            z-index: 1;
+        }
+
+        .dark-mode-toggle::before {
+            content: '🌞';
+            position: absolute;
+            left: 8px;
+            font-size: 14px;
+        }
+
+        .dark-mode-toggle::after {
+            content: '🌙';
+            position: absolute;
+            right: 8px;
+            font-size: 14px;
+        }
+
+        .dark-mode-toggle .slider {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background-color: white;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            left: 3px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .dark-mode-toggle.active {
+            background-color: #666;
+        }
+
+        .dark-mode-toggle.active .slider {
+            left: 33px;
+            background-color: #f8f8f8;
+        }
+
+        body.dark-mode {
+            background-color: #222;
+        }
+
+        body.dark-mode .typing-text {
+            color: #f8f8f8;
+        }
+
+        body.dark-mode .search-input,
+        body.dark-mode .upload-button,
+        body.dark-mode .university-search {
+            background-color: #333;
+            color: #f8f8f8;
+            border-color: #444;
+        }
+
+        body.dark-mode .university-select option:hover,
+        body.dark-mode .university-select option:focus,
+        body.dark-mode .university-select option:active {
+            background-color: #444;
+        }
+
+        body.dark-mode .upload-button svg {
+            fill: #f8f8f8;
+        }
+    </style>
+</head>
+<body>
+    <div class="search-container">
+        <div class="typing-text"></div>
+        <div class="search-input-container">
+            <input type="text" class="search-input" placeholder="Search..." autofocus>
+            <label class="upload-button">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
+                    <line x1="12" y1="8" x2="12" y2="16" stroke="currentColor" stroke-width="2"/>
+                    <line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                Images
+                <input type="file" accept="image/*">
+            </label>
+            <div class="university-select-container">
+                <input type="text" class="university-search" placeholder="Search university..." style="
+                    width: 100%;
+                    padding: 8px 16px;
+                    font-size: 14px;
+                    border: 1px solid #ddd;
+                    border-radius: 20px;
+                    outline: none;
+                    transition: all 0.3s ease;
+                    background-color: var(--bg-color, white);
+                    color: var(--text-color, #333);
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                ">
+
+        <style>
+            body.dark-mode {
+                --bg-color: #333;
+                --text-color: #f8f8f8;
+            }
+
+            body {
+                --bg-color: white;
+                --text-color: #333;
+            }
+        </style>
+                <select class="university-select" size="8" style="
+                    position: absolute;
+                    left: 0;
+                    top: 40px;
+                    width: 100%;
+                    max-height: 400px;
+                    padding: 8px;
+                    font-size: 14px;
+                    border: 1px solid #ddd;
+                    border-radius: 10px;
+                    background-color: white;
+                    color: #333;
+                    cursor: pointer;
+                    outline: none;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                    display: none;
+                    overflow-y: auto;
+                ">
+                    <option value="" disabled selected>Select University</option>
+                    <option value="bu">Boston University</option>
+                    <option value="caltech">California Institute of Technology</option>
+                    <option value="cmu">Carnegie Mellon University</option>
+                    <option value="columbia">Columbia University</option>
+                    <option value="cornell">Cornell University</option>
+                    <option value="duke">Duke University</option>
+                    <option value="emory">Emory University</option>
+                    <option value="gatech">Georgia Institute of Technology</option>
+                    <option value="harvard">Harvard University</option>
+                    <option value="jhu">Johns Hopkins University</option>
+                    <option value="mit">Massachusetts Institute of Technology</option>
+                    <option value="northwestern">Northwestern University</option>
+                    <option value="psu">Penn State University</option>
+                    <option value="princeton">Princeton University</option>
+                    <option value="purdue">Purdue University</option>
+                    <option value="rice">Rice University</option>
+                    <option value="stanford">Stanford University</option>
+                    <option value="uci">University of California, Irvine</option>
+                    <option value="ucla">University of California, Los Angeles</option>
+                    <option value="ucsd">University of California, San Diego</option>
+                    <option value="berkeley">University of California, Berkeley</option>
+                    <option value="uchicago">University of Chicago</option>
+                    <option value="uiuc">University of Illinois Urbana–Champaign</option>
+                    <option value="umass">University of Massachusetts Amherst</option>
+                    <option value="umich">University of Michigan–Ann Arbor</option>
+                    <option value="umn">University of Minnesota–Twin Cities</option>
+                    <option value="unc">University of North Carolina at Chapel Hill</option>
+                    <option value="upenn">University of Pennsylvania</option>
+                    <option value="usc">University of Southern California</option>
+                    <option value="utexas">University of Texas at Austin</option>
+                    <option value="uva">University of Virginia</option>
+                    <option value="uw">University of Washington, Seattle</option>
+                    <option value="wisc">University of Wisconsin–Madison</option>
+                    <option value="wustl">Washington University in St. Louis</option>
+                    <option value="yale">Yale University</option>
+                </select>
+            </div>
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const searchInput = document.querySelector('.university-search');
+                    const select = document.querySelector('.university-select');
+                    const options = Array.from(select.options);
+
+                    searchInput.addEventListener('focus', function() {
+                        select.style.display = 'block';
+                    });
+
+                    searchInput.addEventListener('input', function() {
+                        const searchTerm = this.value.toLowerCase();
+                        
+                        options.forEach(option => {
+                            const text = option.text.toLowerCase();
+                            option.style.display = text.includes(searchTerm) ? '' : 'none';
+                        });
+
+                        select.style.display = 'block';
+                    });
+
+                    select.addEventListener('change', function() {
+                        searchInput.value = this.options[this.selectedIndex].text;
+                        select.style.display = 'none';
+                    });
+
+                    document.addEventListener('click', function(e) {
+                        if (!e.target.closest('.university-select-container')) {
+                            select.style.display = 'none';
+                        }
+                    });
+                });
+            </script>
+            <div class="dark-mode-toggle">
+                <div class="slider"></div>
+            </div>
+
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const darkModeToggle = document.querySelector('.dark-mode-toggle');
+                    
+                    darkModeToggle.addEventListener('click', function() {
+                        this.classList.toggle('active');
+                        document.body.classList.toggle('dark-mode');
+                    });
+                });
+            </script>
+     
+            </script>
+        </div>
+    </div>
+
+    <script>
+        const texts = [
+            "Get Help With Class Scheduling",
+            "Get Help With Professors",
+            "Get Help With Counseling"
+        ];
+        let currentIndex = 0;
+        let isDeleting = false;
+        let currentText = '';
+        let typingSpeed = 50;
+        const deletingSpeed = 30;
+        const pauseTime = 1500;
+
+        const typingElement = document.querySelector('.typing-text');
+
+        function type() {
+            const fullText = texts[currentIndex];
+            
+            if (isDeleting) {
+                currentText = fullText.substring(0, currentText.length - 1);
+            } else {
+                currentText = fullText.substring(0, currentText.length + 1);
+            }
+
+            typingElement.textContent = currentText;
+
+            if (!isDeleting && currentText === fullText) {
+                isDeleting = true;
+                setTimeout(type, pauseTime);
+                return;
+            }
+
+            if (isDeleting && currentText === '') {
+                isDeleting = false;
+                currentIndex = (currentIndex + 1) % texts.length;
+                setTimeout(type, typingSpeed);
+                return;
+            }
+
+            setTimeout(type, isDeleting ? deletingSpeed : typingSpeed);
+        }
+
+        setTimeout(type, typingSpeed);
+    </script>
+</body>
+</html>
