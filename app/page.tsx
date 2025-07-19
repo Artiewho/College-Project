@@ -2,13 +2,21 @@
 
 import Image from "next/image";
 import { useEffect, useState, useRef } from 'react';
-import Script from 'next/script';
 
 export default function Home() {
+  // Client-side mounting state to prevent hydration issues
   const [mounted, setMounted] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [typingText, setTypingText] = useState('');
+  const [searchValue, setSearchValue] = useState('');
+  const [universitySearchValue, setUniversitySearchValue] = useState('');
+  const [showUniversitySelect, setShowUniversitySelect] = useState(false);
+  const [filteredOptions, setFilteredOptions] = useState<string[]>([]);
+  const [selectedUniversity, setSelectedUniversity] = useState('');
+  
   const typingTextRef = useRef<HTMLDivElement>(null);
+  const universitySelectRef = useRef<HTMLSelectElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   
   // Animation state references
   const textsRef = useRef([
@@ -25,18 +33,98 @@ export default function Home() {
   const pauseAfterTypingRef = useRef(2000); // Pause after completing typing (ms)
   const pauseAfterDeletingRef = useRef(500); // Pause after completing deletion (ms)
 
+  // Handle search input changes
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchValue(e.target.value);
+  };
+
+  // Handle search form submission
+  const handleSearchSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchValue.trim()) {
+      e.preventDefault();
+      window.location.href = `results.html?q=${encodeURIComponent(searchValue.trim())}`;
+    }
+  };
+
+  // Handle university search input changes
+  const handleUniversitySearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const searchTerm = e.target.value.toLowerCase();
+    setUniversitySearchValue(searchTerm);
+    
+    if (universitySelectRef.current) {
+      const options = Array.from(universitySelectRef.current.options);
+      const filtered = options
+        .filter(option => option.text.toLowerCase().includes(searchTerm))
+        .map(option => option.text);
+      
+      setFilteredOptions(filtered);
+    }
+    
+    setShowUniversitySelect(true);
+  };
+
+  // Handle university selection
+  const handleUniversitySelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedUniversity(e.target.value);
+    if (e.target.selectedIndex >= 0) {
+      setUniversitySearchValue(e.target.options[e.target.selectedIndex].text);
+    }
+    setShowUniversitySelect(false);
+  };
+
+  // Handle click outside university select
+  useEffect(() => {
+    if (!mounted) return;
+    
+    const handleClickOutside = (e: MouseEvent) => {
+      if (universitySelectRef.current && !(e.target as Element).closest('.university-select-container')) {
+        setShowUniversitySelect(false);
+      }
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [mounted]);
+
+  // Initialize component and start animation
   useEffect(() => {
     setMounted(true);
-    let timer: NodeJS.Timeout;
     
-    // Check if dark mode was previously enabled
+    // Check if dark mode was previously enabled - only on client
     if (typeof window !== 'undefined') {
       const savedDarkMode = localStorage.getItem('darkMode') === 'enabled';
-      setIsDarkMode(savedDarkMode);
-      if (savedDarkMode) {
-        document.body.classList.add('dark-mode');
-      }
+      setIsDarkMode(savedDarkMode || false);
     }
+  }, []);
+  
+  // Effect to handle dark mode changes - only run on client
+  useEffect(() => {
+    if (!mounted) return;
+    
+    // Apply dark mode to body
+    if (isDarkMode) {
+      document.body.classList.add('dark-mode');
+      document.documentElement.style.setProperty('--bg-color', '#333');
+      document.documentElement.style.setProperty('--text-color', '#f8f8f8');
+    } else {
+      document.body.classList.remove('dark-mode');
+      document.documentElement.style.setProperty('--bg-color', 'white');
+      document.documentElement.style.setProperty('--text-color', '#333');
+    }
+    
+    // Save preference to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
+    }
+  }, [isDarkMode, mounted]);
+  
+  // Typing animation effect - only run on client
+  useEffect(() => {
+    if (!mounted) return;
+    
+    let timer: NodeJS.Timeout;
     
     // Typing animation with consistent timing
     const animateText = () => {
@@ -81,134 +169,12 @@ export default function Home() {
 
     // Start the animation
     timer = setTimeout(animateText, typingIntervalRef.current);
-
-    // University search functionality
-    const searchInput = document.querySelector('.university-search');
-    const select = document.querySelector('.university-select');
-    if (searchInput && select) {
-      const options = Array.from((select as HTMLSelectElement).options);
-
-      searchInput.addEventListener('focus', function() {
-        (select as HTMLSelectElement).style.display = 'block';
-      });
-
-      searchInput.addEventListener('input', function() {
-        const searchTerm = ((searchInput as HTMLInputElement).value).toLowerCase();
-        
-        options.forEach(option => {
-          const text = (option as HTMLOptionElement).text.toLowerCase();
-          (option as HTMLOptionElement).style.display = text.includes(searchTerm) ? '' : 'none';
-        });
-
-        (select as HTMLSelectElement).style.display = 'block';
-      });
-
-      select.addEventListener('change', function() {
-        (searchInput as HTMLInputElement).value = (select as HTMLSelectElement).options[(select as HTMLSelectElement).selectedIndex].text;
-        (select as HTMLSelectElement).style.display = 'none';
-      });
-
-      document.addEventListener('click', function(e) {
-        if (!(e.target as Element).closest('.university-select-container')) {
-          (select as HTMLSelectElement).style.display = 'none';
-        }
-      });
-    }
-
-    // Dark mode toggle functionality
-    const darkModeToggle = document.querySelector('.dark-mode-toggle');
-    const universitySelect = document.querySelector('.university-select');
-    if (darkModeToggle && universitySelect) {
-      // Check if dark mode was previously enabled
-      if (localStorage.getItem('darkMode') === 'enabled') {
-        darkModeToggle.classList.add('active');
-        document.body.classList.add('dark-mode');
-        applyDarkModeToSelect(true);
-        setIsDarkMode(true);
-      }
-      
-      darkModeToggle.addEventListener('click', function() {
-        (darkModeToggle as HTMLElement).classList.toggle('active');
-        const isDarkMode = document.body.classList.toggle('dark-mode');
-        applyDarkModeToSelect(isDarkMode);
-        setIsDarkMode(isDarkMode);
-        
-        // Save preference to localStorage
-        localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
-      });
-    }
-    
-    function applyDarkModeToSelect(isDarkMode: boolean) {
-      const universitySelect = document.querySelector('.university-select') as HTMLSelectElement;
-      const universityOptions = Array.from(universitySelect.options);
-      
-      if (isDarkMode) {
-        universitySelect.style.backgroundColor = '#333';
-        universitySelect.style.color = '#f8f8f8';
-        universitySelect.style.borderColor = '#555';
-        
-        universityOptions.forEach(option => {
-          (option as HTMLOptionElement).style.backgroundColor = '#333';
-          (option as HTMLOptionElement).style.color = '#f8f8f8';
-        });
-      } else {
-        universitySelect.style.backgroundColor = 'white';
-        universitySelect.style.color = '#333';
-        universitySelect.style.borderColor = '#ddd';
-        
-        universityOptions.forEach(option => {
-          (option as HTMLOptionElement).style.backgroundColor = 'white';
-          (option as HTMLOptionElement).style.color = '#333';
-        });
-      }
-    }
     
     // Cleanup function
     return () => {
       clearTimeout(timer);
     };
-  }, [typingText]); // Add typingText as a dependency
-
-  // Effect to handle dark mode changes
-  useEffect(() => {
-    if (!mounted) return;
-    
-    // Apply dark mode to body
-    if (isDarkMode) {
-      document.body.classList.add('dark-mode');
-    } else {
-      document.body.classList.remove('dark-mode');
-    }
-    
-    // Apply dark mode to select element
-    const universitySelect = document.querySelector('.university-select') as HTMLSelectElement;
-    if (universitySelect) {
-      const universityOptions = Array.from(universitySelect.options);
-      
-      if (isDarkMode) {
-        universitySelect.style.backgroundColor = '#333';
-        universitySelect.style.color = '#f8f8f8';
-        universitySelect.style.borderColor = '#555';
-        
-        universityOptions.forEach(option => {
-          (option as HTMLOptionElement).style.backgroundColor = '#333';
-          (option as HTMLOptionElement).style.color = '#f8f8f8';
-        });
-      } else {
-        universitySelect.style.backgroundColor = 'white';
-        universitySelect.style.color = '#333';
-        universitySelect.style.borderColor = '#ddd';
-        
-        universityOptions.forEach(option => {
-          (option as HTMLOptionElement).style.backgroundColor = 'white';
-          (option as HTMLOptionElement).style.color = '#333';
-        });
-      }
-    }
-    
-    // Save preference to localStorage
-    localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
-  }, [isDarkMode, mounted]);
+  }, [typingText, mounted]); // Add mounted as a dependency
 
   // Toggle dark mode function
   const toggleDarkMode = () => {
@@ -222,7 +188,15 @@ export default function Home() {
     <div className="search-container">
       <div className="typing-text" ref={typingTextRef}>{typingText}</div>
       <div className="search-input-container">
-        <input type="text" className="search-input" placeholder="Search..." autoFocus />
+        <input 
+          type="text" 
+          className="search-input" 
+          placeholder="Search..." 
+          value={searchValue}
+          onChange={handleSearchChange}
+          onKeyPress={handleSearchSubmit}
+          ref={searchInputRef}
+        />
         <label className="upload-button">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2"/>
@@ -233,9 +207,23 @@ export default function Home() {
           <input type="file" accept="image/*" />
         </label>
         <div className="university-select-container">
-          <input type="text" className="university-search" placeholder="Search university..." />
-          <select className="university-select" size={8}>
-            <option value="" disabled selected>Select University</option>
+          <input 
+            type="text" 
+            className="university-search" 
+            placeholder="Search university..." 
+            value={universitySearchValue}
+            onChange={handleUniversitySearchChange}
+            onFocus={() => setShowUniversitySelect(true)}
+          />
+          <select 
+            className="university-select" 
+            size={8}
+            style={{ display: showUniversitySelect ? 'block' : 'none' }}
+            onChange={handleUniversitySelect}
+            ref={universitySelectRef}
+            value={selectedUniversity}
+          >
+            <option value="" disabled>Select University</option>
             <option value="bu">Boston University</option>
             <option value="caltech">California Institute of Technology</option>
             <option value="cmu">Carnegie Mellon University</option>
@@ -276,6 +264,7 @@ export default function Home() {
         <div 
           className={`dark-mode-toggle ${isDarkMode ? 'active' : ''}`}
           onClick={toggleDarkMode}
+          suppressHydrationWarning={true}
         >
           <div className="slider"></div>
         </div>

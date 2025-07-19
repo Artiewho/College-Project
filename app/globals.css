@@ -255,15 +255,16 @@ body.dark-mode .university-search {
   border-color: #444;
 }
 
+/* Replace these lines */
 body.dark-mode .university-select {
-  background-color: var(--bg-color);
-  color: var(--text-color);
+  background-color: #333;
+  color: #f8f8f8;
   border-color: #444;
 }
 
 body.dark-mode .university-select option {
-  background-color: var(--bg-color);
-  color: var(--text-color);
+  background-color: #333;
+  color: #f8f8f8;
 }
 
 body.dark-mode .university-select option:hover,

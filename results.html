@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Results</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .results-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        .search-bubble {
+            position: absolute;
+            bottom: 50px;
+            background-color: #f0f0f0;
+            padding: 15px 25px;
+            border-radius: 25px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        
+        .search-bubble.dark-mode {
+            background-color: #444;
+            color: #f8f8f8;
+        }
+        
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 8px 16px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .back-button:hover {
+            background-color: #f8f8f8;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        body.dark-mode .back-button {
+            background-color: #333;
+            color: #f8f8f8;
+            border-color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="results-container">
+        <button class="back-button" onclick="window.location.href='index.html'">Back to Search</button>
+        <div class="search-bubble" id="search-bubble"></div>
+    </div>
+    
+    <script>
+        // Get the search query from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const searchQuery = urlParams.get('q');
+        
+        // Display the search query in the bubble
+        const searchBubble = document.getElementById('search-bubble');
+        if (searchQuery) {
+            searchBubble.textContent = searchQuery;
+        } else {
+            searchBubble.textContent = 'No search query provided';
+        }
+        
+        // Check if dark mode was previously enabled
+        if (localStorage.getItem('darkMode') === 'enabled') {
+            document.body.classList.add('dark-mode');
+            searchBubble.classList.add('dark-mode');
+        }
+    </script>
+</body>
+</html>
