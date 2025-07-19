@@ -29,6 +29,15 @@ export default function Home() {
     setMounted(true);
     let timer: NodeJS.Timeout;
     
+    // Check if dark mode was previously enabled
+    if (typeof window !== 'undefined') {
+      const savedDarkMode = localStorage.getItem('darkMode') === 'enabled';
+      setIsDarkMode(savedDarkMode);
+      if (savedDarkMode) {
+        document.body.classList.add('dark-mode');
+      }
+    }
+    
     // Typing animation with consistent timing
     const animateText = () => {
       const texts = textsRef.current;
@@ -108,12 +117,50 @@ export default function Home() {
 
     // Dark mode toggle functionality
     const darkModeToggle = document.querySelector('.dark-mode-toggle');
-    if (darkModeToggle) {
+    const universitySelect = document.querySelector('.university-select');
+    if (darkModeToggle && universitySelect) {
+      // Check if dark mode was previously enabled
+      if (localStorage.getItem('darkMode') === 'enabled') {
+        darkModeToggle.classList.add('active');
+        document.body.classList.add('dark-mode');
+        applyDarkModeToSelect(true);
+        setIsDarkMode(true);
+      }
+      
       darkModeToggle.addEventListener('click', function() {
         (darkModeToggle as HTMLElement).classList.toggle('active');
-        document.body.classList.toggle('dark-mode');
-        setIsDarkMode(document.body.classList.contains('dark-mode'));
+        const isDarkMode = document.body.classList.toggle('dark-mode');
+        applyDarkModeToSelect(isDarkMode);
+        setIsDarkMode(isDarkMode);
+        
+        // Save preference to localStorage
+        localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
       });
+    }
+    
+    function applyDarkModeToSelect(isDarkMode: boolean) {
+      const universitySelect = document.querySelector('.university-select') as HTMLSelectElement;
+      const universityOptions = Array.from(universitySelect.options);
+      
+      if (isDarkMode) {
+        universitySelect.style.backgroundColor = '#333';
+        universitySelect.style.color = '#f8f8f8';
+        universitySelect.style.borderColor = '#555';
+        
+        universityOptions.forEach(option => {
+          (option as HTMLOptionElement).style.backgroundColor = '#333';
+          (option as HTMLOptionElement).style.color = '#f8f8f8';
+        });
+      } else {
+        universitySelect.style.backgroundColor = 'white';
+        universitySelect.style.color = '#333';
+        universitySelect.style.borderColor = '#ddd';
+        
+        universityOptions.forEach(option => {
+          (option as HTMLOptionElement).style.backgroundColor = 'white';
+          (option as HTMLOptionElement).style.color = '#333';
+        });
+      }
     }
     
     // Cleanup function
@@ -121,6 +168,52 @@ export default function Home() {
       clearTimeout(timer);
     };
   }, [typingText]); // Add typingText as a dependency
+
+  // Effect to handle dark mode changes
+  useEffect(() => {
+    if (!mounted) return;
+    
+    // Apply dark mode to body
+    if (isDarkMode) {
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+    
+    // Apply dark mode to select element
+    const universitySelect = document.querySelector('.university-select') as HTMLSelectElement;
+    if (universitySelect) {
+      const universityOptions = Array.from(universitySelect.options);
+      
+      if (isDarkMode) {
+        universitySelect.style.backgroundColor = '#333';
+        universitySelect.style.color = '#f8f8f8';
+        universitySelect.style.borderColor = '#555';
+        
+        universityOptions.forEach(option => {
+          (option as HTMLOptionElement).style.backgroundColor = '#333';
+          (option as HTMLOptionElement).style.color = '#f8f8f8';
+        });
+      } else {
+        universitySelect.style.backgroundColor = 'white';
+        universitySelect.style.color = '#333';
+        universitySelect.style.borderColor = '#ddd';
+        
+        universityOptions.forEach(option => {
+          (option as HTMLOptionElement).style.backgroundColor = 'white';
+          (option as HTMLOptionElement).style.color = '#333';
+        });
+      }
+    }
+    
+    // Save preference to localStorage
+    localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
+  }, [isDarkMode, mounted]);
+
+  // Toggle dark mode function
+  const toggleDarkMode = () => {
+    setIsDarkMode(prev => !prev);
+  };
 
   // Only render the component client-side to avoid hydration issues
   if (!mounted) return null;
@@ -180,7 +273,10 @@ export default function Home() {
             <option value="yale">Yale University</option>
           </select>
         </div>
-        <div className="dark-mode-toggle">
+        <div 
+          className={`dark-mode-toggle ${isDarkMode ? 'active' : ''}`}
+          onClick={toggleDarkMode}
+        >
           <div className="slider"></div>
         </div>
       </div>

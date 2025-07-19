@@ -147,7 +147,7 @@
             max-height: 400px;
             padding: 8px;
             font-size: 14px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color, #ddd);
             border-radius: 20px;
             background-color: var(--bg-color, white);
             color: var(--text-color, #333);
@@ -159,40 +159,64 @@
             overflow-y: auto;
         }
 
+        .university-select option {
+            background-color: var(--bg-color, white);
+            color: var(--text-color, #333);
+            padding: 8px;
+        }
+
+        .university-select option:hover,
+        .university-select option:focus,
+        .university-select option:checked {
+            background-color: var(--option-hover-bg, #f0f0f0);
+        }
+
+        .university-select:hover {
+            background-color: var(--hover-bg-color, #f8f8f8);
+        }
+
         /* Add CSS variables at root level */
         :root {
             --bg-color: white;
             --text-color: #333;
+            --hover-bg-color: #f8f8f8;
+            --border-color: #ddd;
+            --option-hover-bg: #f0f0f0;
         }
 
         /* Update dark mode styles */
         body.dark-mode {
             --bg-color: #333;
             --text-color: #f8f8f8;
+            --hover-bg-color: #444;
+            --border-color: #555;
+            --option-hover-bg: #555;
         }
 
         body.dark-mode .university-select {
             background-color: var(--bg-color);
             color: var(--text-color);
-            border-color: #444;
+            border-color: var(--border-color);
         }
 
         body.dark-mode .university-select option {
             background-color: var(--bg-color);
             color: var(--text-color);
         }
-        .university-select:hover {
-            background-color: #f8f8f8;
-        }
 
+        body.dark-mode .university-select option:hover,
+        body.dark-mode .university-select option:focus,
+        body.dark-mode .university-select option:active {
+            background-color: var(--option-hover-bg);
+        }
         .dark-mode-toggle {
             position: absolute;
             left: 490px;
-            bottom: -45px;
+            top: 0; /* Aligned with the top of dropdown */
             width: 60px;
-            height: 30px;
+            height: 50px; /* Significantly increased height to make it more noticeable */
             background-color: #ddd;
-            border-radius: 15px;
+            border-radius: 20px;
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -218,12 +242,14 @@
 
         .dark-mode-toggle .slider {
             position: absolute;
-            width: 24px;
-            height: 24px;
+            width: 28px; /* Increased from 24px */
+            height: 28px; /* Increased from 24px */
             background-color: white;
             border-radius: 50%;
             transition: all 0.3s ease;
-            left: 3px;
+            left: 4px; /* Adjusted from 3px */
+            top: 50%; /* Center vertically */
+            transform: translateY(-50%); /* Center vertically */
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
@@ -232,7 +258,7 @@
         }
 
         .dark-mode-toggle.active .slider {
-            left: 33px;
+            left: 28px; /* Adjusted from 33px */
             background-color: #f8f8f8;
         }
 

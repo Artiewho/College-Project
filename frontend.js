@@ -34,11 +34,48 @@ document.addEventListener('DOMContentLoaded', function() {
 // Dark mode toggle functionality
 document.addEventListener('DOMContentLoaded', function() {
     const darkModeToggle = document.querySelector('.dark-mode-toggle');
+    const universitySelect = document.querySelector('.university-select');
+    const universityOptions = Array.from(universitySelect.options);
+    
+    // Check if dark mode was previously enabled
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        darkModeToggle.classList.add('active');
+        document.body.classList.add('dark-mode');
+        applyDarkModeToSelect(true);
+    }
     
     darkModeToggle.addEventListener('click', function() {
         this.classList.toggle('active');
-        document.body.classList.toggle('dark-mode');
+        const isDarkMode = document.body.classList.toggle('dark-mode');
+        
+        // Apply dark mode to select element
+        applyDarkModeToSelect(isDarkMode);
+        
+        // Save preference to localStorage
+        localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
     });
+    
+    function applyDarkModeToSelect(isDarkMode) {
+        if (isDarkMode) {
+            universitySelect.style.backgroundColor = '#333';
+            universitySelect.style.color = '#f8f8f8';
+            universitySelect.style.borderColor = '#555';
+            
+            universityOptions.forEach(option => {
+                option.style.backgroundColor = '#333';
+                option.style.color = '#f8f8f8';
+            });
+        } else {
+            universitySelect.style.backgroundColor = 'white';
+            universitySelect.style.color = '#333';
+            universitySelect.style.borderColor = '#ddd';
+            
+            universityOptions.forEach(option => {
+                option.style.backgroundColor = 'white';
+                option.style.color = '#333';
+            });
+        }
+    }
 });
 
 // Typing animation functionality

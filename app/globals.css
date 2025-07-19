@@ -191,7 +191,7 @@ body.dark-mode .search-input-container {
   left: 490px;
   bottom: -45px;
   width: 60px;
-  height: 30px;
+  height: 36px; /* Adjusted to match upload button height */
   background-color: #ddd;
   border-radius: 15px;
   cursor: pointer;
@@ -225,6 +225,8 @@ body.dark-mode .search-input-container {
   border-radius: 50%;
   transition: all 0.3s ease;
   left: 3px;
+  top: 50%; /* Center vertically */
+  transform: translateY(-50%); /* Center vertically */
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
