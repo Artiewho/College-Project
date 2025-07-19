@@ -5,6 +5,8 @@
   --foreground: #171717;
   --bg-color: white;
   --text-color: #333;
+  --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 @theme inline {
@@ -33,7 +35,9 @@ body {
   justify-content: center;
   align-items: center;
   background-color: #f5f5f5;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family: var(--font-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .search-container {
@@ -380,4 +384,533 @@ body.dark-mode .loading {
 body.dark-mode .error {
   color: #fc8181;
   background-color: rgba(229, 62, 62, 0.2);
+}
+
+/* Add this to your existing CSS */
+.web-search-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #f0f7ff;
+  color: #0066cc;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin: 12px 0;
+  font-size: 14px;
+  width: fit-content;
+}
+
+.dark-mode .web-search-indicator {
+  background-color: #1a2e44;
+  color: #66b2ff;
+}
+
+.web-search-indicator svg {
+  font-size: 16px;
+}
+
+/* Add these styles for citations */
+.citation-link {
+  color: #0066cc;
+  text-decoration: none;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.citation-link:hover {
+  text-decoration: underline;
+}
+
+.dark-mode .citation-link {
+  color: #66b2ff;
+}
+
+.citations-list {
+  margin-top: 30px;
+  padding: 15px;
+  background-color: #f8f8f8;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.dark-mode .citations-list {
+  background-color: #333;
+}
+
+.citations-list h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.citations-list ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.citations-list li {
+  margin-bottom: 8px;
+}
+
+.citation-source {
+  display: flex;
+  align-items: center;
+  color: #0066cc;
+  text-decoration: none;
+}
+
+.dark-mode .citation-source {
+  color: #66b2ff;
+}
+
+.citation-source:hover {
+  text-decoration: underline;
+}
+
+.citation-icon {
+  margin-right: 6px;
+  font-size: 12px;
+}
+
+/* Update the results container to better position content */
+.results-container {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px 20px 20px 20px; /* Reduced top and bottom padding */
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Add these styles for the AI response container */
+.ai-response {
+  width: calc(100% - 2in); /* Set width with 1-inch margins on each side */
+  max-width: 1400px; /* Increased max-width for wider display */
+  margin: 10px auto; /* Reduced margin */
+  padding: 20px; /* Reduced padding */
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 120px); /* Set max height to fit in viewport */
+}
+
+.dark-mode .ai-response {
+  background-color: #333;
+  color: #f8f8f8;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Make the response content non-scrollable with multi-column layout */
+.response-content {
+  overflow-y: visible;
+  padding-right: 10px;
+  margin-bottom: 10px; /* Reduced margin */
+  line-height: 1.6; /* Improved line height for readability */
+  font-size: 16px; /* Slightly increased font size */
+  column-count: 3; /* Increased to three columns */
+  column-gap: 30px; /* Reduced gap between columns */
+  column-rule: 1px solid #eee;
+  column-fill: balance; /* Balance content across columns */
+  font-family: var(--font-primary);
+  letter-spacing: -0.011em; /* Slight letter spacing adjustment for modern look */
+}
+
+/* Style headings for semesters */
+.response-content p:has(strong:only-child) {
+  font-size: 22px; /* Slightly increased font size */
+  font-family: var(--font-heading);
+  font-weight: 700;
+  display: block;
+  margin-top: 20px; /* Reduced margin */
+  margin-bottom: 15px; /* Reduced margin */
+  break-before: column; /* Start each semester in a new column if possible */
+  break-after: avoid; /* Keep heading with its content */
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 6px; /* Reduced padding */
+  color: #3498db;
+  letter-spacing: -0.02em; /* Tighter letter spacing for headings */
+}
+
+/* Style course headings */
+.response-content p strong {
+  font-size: 17px; /* Slightly increased font size */
+  font-family: var(--font-heading);
+  font-weight: 600;
+  display: block;
+  margin-top: 15px; /* Reduced margin */
+  margin-bottom: 8px; /* Reduced margin */
+  break-after: avoid;
+  letter-spacing: -0.01em; /* Slight letter spacing adjustment */
+}
+
+/* Update semester content for single semester view */
+.semester-content {
+  overflow-y: visible;
+  padding-right: 10px;
+  margin-bottom: 10px;
+  line-height: 1.6; /* Improved line height */
+  font-size: 16px; /* Slightly increased font size */
+  column-count: 1; /* Single column for semester view */
+  font-family: var(--font-primary);
+  letter-spacing: -0.011em; /* Slight letter spacing adjustment */
+}
+
+/* Semester title styling */
+.semester-title {
+  font-size: 26px;
+  font-weight: 700;
+  font-family: var(--font-heading);
+  margin: 0;
+  color: #3498db;
+  text-align: center;
+  letter-spacing: -0.02em; /* Tighter letter spacing for headings */
+}
+
+.dark-mode .response-content {
+  column-rule: 1px solid #555;
+}
+
+/* Style paragraphs within the response content */
+.response-content p {
+  margin-bottom: 8px; /* Reduced margin */
+  break-inside: avoid;
+}
+
+/* Style headings for semesters */
+.response-content p:has(strong:only-child) {
+  font-size: 20px; /* Slightly reduced font size */
+  display: block;
+  margin-top: 20px; /* Reduced margin */
+  margin-bottom: 15px; /* Reduced margin */
+  break-before: column; /* Start each semester in a new column if possible */
+  break-after: avoid; /* Keep heading with its content */
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 6px; /* Reduced padding */
+  color: #3498db;
+}
+
+.dark-mode .response-content p:has(strong:only-child) {
+  border-bottom: 2px solid #66b2ff;
+  color: #66b2ff;
+}
+
+/* Style course headings */
+.response-content p strong {
+  font-size: 16px; /* Slightly reduced font size */
+  display: block;
+  margin-top: 15px; /* Reduced margin */
+  margin-bottom: 8px; /* Reduced margin */
+  break-after: avoid;
+}
+
+/* Add spacing between classes */
+.response-content p:empty {
+  height: 10px; /* Reduced height */
+}
+
+/* Optimize citation list */
+.citations-list {
+  margin-top: 15px; /* Reduced margin */
+  padding: 10px; /* Reduced padding */
+  background-color: #f8f8f8;
+  border-radius: 8px;
+  font-size: 13px; /* Reduced font size */
+}
+
+.citations-list h3 {
+  margin-top: 0;
+  margin-bottom: 8px; /* Reduced margin */
+  font-size: 15px; /* Reduced font size */
+  font-weight: 600;
+}
+
+.citations-list ol {
+  margin: 0;
+  padding-left: 20px;
+  column-count: 2; /* Display citations in two columns */
+  column-gap: 20px;
+}
+
+.citations-list li {
+  margin-bottom: 6px; /* Reduced margin */
+  break-inside: avoid;
+}
+
+.search-bubble {
+  position: absolute;
+  bottom: 50px;
+  background-color: #f0f0f0;
+  padding: 15px 25px;
+  border-radius: 25px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  max-width: 1000px; /* Match the new AI response width */
+  width: 95%;
+  word-wrap: break-word;
+}
+
+/* Add these styles at the end of the file */
+
+/* Semester navigation styles */
+.semester-navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.dark-mode .semester-navigation {
+  border-bottom: 1px solid #555;
+}
+
+.semester-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+  color: #3498db;
+  text-align: center;
+}
+
+.dark-mode .semester-title {
+  color: #66b2ff;
+}
+
+.semester-nav-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: #f0f0f0;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.semester-nav-button:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.semester-nav-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dark-mode .semester-nav-button {
+  background-color: #444;
+  color: #f0f0f0;
+}
+
+.dark-mode .semester-nav-button:hover:not(:disabled) {
+  background-color: #555;
+}
+
+/* Semester pagination dots */
+.semester-pagination {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.semester-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #ddd;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.semester-dot.active {
+  background-color: #3498db;
+  transform: scale(1.2);
+}
+
+.dark-mode .semester-dot {
+  background-color: #555;
+}
+
+.dark-mode .semester-dot.active {
+  background-color: #66b2ff;
+}
+
+/* Swipe instruction */
+.swipe-instruction {
+  text-align: center;
+  font-size: 14px;
+  color: #888;
+  margin-top: 10px;
+  font-style: italic;
+}
+
+.dark-mode .swipe-instruction {
+  color: #aaa;
+}
+
+/* Update response content for single semester view */
+.semester-content {
+  overflow-y: visible;
+  padding-right: 10px;
+  margin-bottom: 10px;
+  line-height: 1.5;
+  font-size: 15px;
+  column-count: 1; /* Single column for semester view */
+}
+
+/* Add swipe animation */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.semester-content {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+/* Make the AI response container touch-friendly */
+.ai-response {
+  width: calc(100% - 2in); /* Set width with 1-inch margins on each side */
+  max-width: 1000px;
+  margin: 10px auto;
+  padding: 20px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  touch-action: pan-y; /* Enable horizontal swiping */
+  user-select: none; /* Prevent text selection during swipe */
+  cursor: grab;
+}
+
+.ai-response:active {
+  cursor: grabbing;
+}
+
+.dark-mode .ai-response {
+  background-color: #333;
+  color: #f8f8f8;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ai-response {
+    width: 95%;
+    padding: 15px;
+  }
+  
+  .semester-title {
+    font-size: 20px;
+  }
+  
+  .semester-nav-button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}
+
+/* Style for professor information and ratings */
+.response-content p:nth-child(2n+2),
+.semester-content p:nth-child(2n+2) {
+  font-weight: 500;
+  color: #444;
+  margin-bottom: 4px;
+  padding-left: 8px;
+  border-left: 2px solid #3498db;
+}
+
+.dark-mode .response-content p:nth-child(2n+2),
+.dark-mode .semester-content p:nth-child(2n+2) {
+  color: #ccc;
+  border-left: 2px solid #66b2ff;
+}
+
+/* Style for ratings */
+.response-content p:nth-child(2n+3),
+.semester-content p:nth-child(2n+3) {
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 12px;
+  padding-left: 8px;
+  border-left: 2px solid #e74c3c;
+}
+
+.dark-mode .response-content p:nth-child(2n+3),
+.dark-mode .semester-content p:nth-child(2n+3) {
+  color: #ddd;
+  border-left: 2px solid #ff6b6b;
+}
+
+/* Style for professor information */
+.response-content p:nth-of-type(n+2):not(:has(strong)):not(:empty),
+.semester-content p:nth-of-type(n+2):not(:has(strong)):not(:empty) {
+  position: relative;
+  padding-left: 12px;
+  margin-bottom: 6px;
+}
+
+/* Professor and ratings highlighting classes */
+.professor-info {
+  font-weight: 600;
+  color: #2c3e50;
+  border-left: 3px solid #e74c3c;
+  padding-left: 10px !important;
+  background-color: rgba(231, 76, 60, 0.05);
+}
+
+.dark-mode .professor-info {
+  color: #ecf0f1;
+  border-left: 3px solid #ff6b6b;
+  background-color: rgba(255, 107, 107, 0.1);
+}
+
+.ratings-info {
+  font-weight: 500;
+  color: #34495e;
+  border-left: 3px solid #3498db;
+  padding-left: 10px !important;
+  background-color: rgba(52, 152, 219, 0.05);
+  margin-bottom: 15px !important;
+}
+
+.dark-mode .ratings-info {
+  color: #ecf0f1;
+  border-left: 3px solid #66b2ff;
+  background-color: rgba(102, 178, 255, 0.1);
+}
+
+/* Remove these problematic selectors (lines 900-915) */
+.response-content p:nth-of-type(n+3):not(:has(strong)):not(:empty):contains("Rating:"),
+.semester-content p:nth-of-type(n+3):not(:has(strong)):not(:empty):contains("Rating:") {
+  font-weight: 500;
+  color: #34495e;
+  border-left: 3px solid #3498db;
+  padding-left: 10px;
+  background-color: rgba(52, 152, 219, 0.05);
+  margin-bottom: 15px;
+}
+
+.dark-mode .response-content p:nth-of-type(n+3):not(:has(strong)):not(:empty):contains("Rating:"),
+.dark-mode .semester-content p:nth-of-type(n+3):not(:has(strong)):not(:empty):contains("Rating:") {
+  color: #ecf0f1;
+  border-left: 3px solid #66b2ff;
+  background-color: rgba(102, 178, 255, 0.1);
 }
