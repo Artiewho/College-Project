@@ -42,7 +42,29 @@ export default function Home() {
   const handleSearchSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchValue.trim()) {
       e.preventDefault();
-      window.location.href = `results.html?q=${encodeURIComponent(searchValue.trim())}`;
+      
+      // Get the selected university text (not the value)
+      let universityName = "";
+      if (universitySelectRef.current && universitySelectRef.current.selectedIndex > 0) {
+        universityName = universitySelectRef.current.options[universitySelectRef.current.selectedIndex].text;
+      }
+      
+      // Extract major from the beginning of the search input (assuming format: "Major: class requests")
+      let major = "";
+      let classRequests = searchValue.trim();
+      
+      // If the search contains a colon, assume the format is "Major: class requests"
+      if (classRequests.includes(":")) {
+        const parts = classRequests.split(":");
+        major = parts[0].trim();
+        classRequests = parts.slice(1).join(":").trim();
+      }
+      
+      // Create the template
+      const template = `${classRequests}\n\nmake a me the easiest schedule with the highest GPA classes and the highest rated professors with the highest average GPAs for the school of ${universityName || "(No university selected)"}\n\ninclude average GPAs for the class and professor if possible.\nmake a full schedule for all semesters until I graduate. Make sure this schedule lists the classes and the professors.`;
+      
+      // Navigate to results page with the template
+      window.location.href = `/results?q=${encodeURIComponent(template)}&major=${encodeURIComponent(major)}&university=${encodeURIComponent(universityName)}`;
     }
   };
 
@@ -191,7 +213,7 @@ export default function Home() {
         <input 
           type="text" 
           className="search-input" 
-          placeholder="Search..." 
+          placeholder="Enter Major and Class Requests" 
           value={searchValue}
           onChange={handleSearchChange}
           onKeyPress={handleSearchSubmit}
