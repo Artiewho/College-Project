@@ -355,3 +355,29 @@ body.dark-mode .major-info {
   font-family: inherit;
   text-align: left;
 }
+
+/* Add these styles at the end of the file */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  font-style: italic;
+  color: #666;
+}
+
+.error {
+  color: #e53e3e;
+  padding: 10px;
+  border-radius: 5px;
+  background-color: rgba(229, 62, 62, 0.1);
+}
+
+body.dark-mode .loading {
+  color: #aaa;
+}
+
+body.dark-mode .error {
+  color: #fc8181;
+  background-color: rgba(229, 62, 62, 0.2);
+}

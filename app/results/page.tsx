@@ -11,6 +11,9 @@ export default function ResultsPage() {
   const university = searchParams.get('university');
   const [mounted, setMounted] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [aiResponse, setAiResponse] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Initialize component
   useEffect(() => {
@@ -35,6 +38,40 @@ export default function ResultsPage() {
     }
   }, [isDarkMode, mounted]);
 
+  // Call OpenAI API when component mounts
+  useEffect(() => {
+    if (!mounted || !query) return;
+
+    const fetchAiResponse = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const response = await fetch('/api/openai', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prompt: query }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        setAiResponse(data.response);
+      } catch (err) {
+        console.error('Error fetching AI response:', err);
+        setError('Failed to get AI response. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAiResponse();
+  }, [query, mounted]);
+
   // Only render the component client-side to avoid hydration issues
   if (!mounted) return null;
 
@@ -52,10 +89,14 @@ export default function ResultsPage() {
       )}
       
       <div className={`search-bubble ${isDarkMode ? 'dark-mode' : ''}`}>
-        {query ? (
-          <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{query}</pre>
+        {loading ? (
+          <div className="loading">Generating your schedule...</div>
+        ) : error ? (
+          <div className="error">{error}</div>
+        ) : aiResponse ? (
+          <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{aiResponse}</pre>
         ) : (
-          'No search query provided'
+          <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{query || 'No search query provided'}</pre>
         )}
       </div>
     </div>
