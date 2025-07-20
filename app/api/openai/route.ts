@@ -1,10 +1,70 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { extractCourseCode, formatProfessorData, generateSemesterSequence } from '../../utils/professorData';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// Extract course codes from a prompt
+function extractCoursesFromPrompt(prompt: string): string[] {
+  // Match common course code patterns (e.g., CS 1301, MATH 2551)
+  const courseRegex = /([A-Z]{2,4})\s*(\d{4})/gi;
+  const matches = [...prompt.matchAll(courseRegex)];
+  return matches.map(match => match[0]);
+}
+
+// Get professor data for courses
+async function getProfessorData(university: string, courses: string[]) {
+  const professorDataMap = new Map();
+  
+  for (const course of courses) {
+    try {
+      const response = await fetch('/api/scraper', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          university,
+          course,
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.professors && data.professors.length > 0) {
+          professorDataMap.set(course, data.professors);
+        }
+      }
+    } catch (error) {
+      console.error(`Error fetching professor data for ${course}:`, error);
+    }
+  }
+  
+  return professorDataMap;
+}
+
+// Extract university from the prompt (improved approach)
+function extractUniversityFromPrompt(prompt: string): string {
+  // Look for common patterns indicating a university
+  const universityPatterns = [
+    /at\s+([\w\s]+(?:University|College|Institute|Tech))/i,
+    /([\w\s]+(?:University|College|Institute|Tech))\s+student/i,
+    /([\w\s]+(?:University|College|Institute|Tech))\s+courses/i,
+    /studying\s+at\s+([\w\s]+(?:University|College|Institute|Tech))/i
+  ];
+  
+  for (const pattern of universityPatterns) {
+    const match = prompt.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  
+  return '';
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +74,75 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
     
-    // Use the Responses API with web search capability
+    // Extract university from the prompt with improved function
+    const university = extractUniversityFromPrompt(prompt);
+    console.log(`Extracted university: ${university}`);
+    
+    // Extract course codes from the prompt
+    const courses = extractCoursesFromPrompt(prompt);
+    console.log(`Extracted courses: ${courses.join(', ')}`);
+    
+    // Get professor data for the courses if university is specified
+    let professorDataMap = new Map();
+    if (university && courses.length > 0) {
+      professorDataMap = await getProfessorData(university, courses);
+    }
+    
+    // Generate semester sequence starting from current year (2025)
+    const semesters = generateSemesterSequence(4); // Generate 4 semesters
+    
+    // Prepare additional context for OpenAI based on scraped data and semester information
+    let additionalContext = '';
+    
+    // Add semester information
+    additionalContext += '\n\nIMPORTANT: Use ONLY the following semesters in your schedule, starting from the current year (2025):\n';
+    semesters.forEach(semester => {
+      additionalContext += `- ${semester}\n`;
+    });
+    additionalContext += '\nDo NOT use any semesters from previous years. The current year is 2025.\n';
+    
+    // Add professor information if available with stronger emphasis on school-specific professors
+    if (professorDataMap.size > 0) {
+      // Special handling for Georgia Tech
+      if (university.toLowerCase().includes('georgia tech')) {
+        additionalContext += `\nHere is information about professors for the requested courses at Georgia Tech, prioritized by highest GPA:\n`;
+        
+        for (const [course, professors] of professorDataMap.entries()) {
+          additionalContext += `\n${course}:\n`;
+          if (professors.length > 0) {
+            // For Georgia Tech, emphasize that these are sorted by GPA
+            additionalContext += `(Professors below are sorted by highest average GPA)\n`;
+            for (const professor of professors.slice(0, 5)) { // Show more professors for Georgia Tech
+              additionalContext += `- ${formatProfessorData(professor)}\n`;
+            }
+          } else {
+            additionalContext += `- No specific professor data found. Please search for professors who teach this course at Georgia Tech.\n`;
+          }
+        }
+        
+        // Add explicit instruction to prioritize GPA for Georgia Tech
+        additionalContext += `\nIMPORTANT: For Georgia Tech courses, ALWAYS prioritize professors with the highest GPA. This is the most important factor for Georgia Tech students.\n`;
+      } else {
+        // Standard handling for other universities
+        additionalContext += `\nHere is information about professors for the requested courses at ${university}:\n`;
+        
+        for (const [course, professors] of professorDataMap.entries()) {
+          additionalContext += `\n${course}:\n`;
+          if (professors.length > 0) {
+            for (const professor of professors.slice(0, 3)) { // Top 3 professors
+              additionalContext += `- ${formatProfessorData(professor)}\n`;
+            }
+          } else {
+            additionalContext += `- No specific professor data found. Please search for professors who teach this course at ${university}.\n`;
+          }
+        }
+      }
+      
+      // Add explicit instruction to use these professors
+      additionalContext += `\nIMPORTANT: ONLY use professors from ${university} who teach the specific courses mentioned. Do NOT make up professor names or use professors from other institutions.\n`;
+    }
+    
+    // Use the Responses API with web search capability and our scraped data
     const response = await openai.responses.create({
       model: "gpt-4o", // Use a model that supports web search
       input: [
@@ -23,7 +151,7 @@ export async function POST(request: NextRequest) {
           content: [
             {
               type: "input_text",
-              text: "You are a college class schedule generator. IMPORTANT: ONLY output the schedule itself with no introductory text, explanations, summaries, or conclusions. Your response must start and end with the schedule information only.\n\nYou MUST search and extract specific numerical data from Rate My Professor and Course Critique websites, including:\n\n1. Professor ratings (on the 5-point scale)\n2. Average GPAs for courses\n3. Course difficulty ratings\n4. Percentage of students who would take the professor again\n\n**CRITICAL AND MANDATORY: YOU MUST INCLUDE ALL PROFESSOR INFORMATION FOR EVERY CLASS. THIS IS THE MOST IMPORTANT PART OF YOUR TASK. ALWAYS SEARCH FOR EACH PROFESSOR AND INCLUDE THEIR RATINGS. NEVER SKIP THIS STEP. EVERY CLASS MUST HAVE A PROFESSOR NAME AND COMPLETE RATINGS. ALWAYS START THE LINE AFTER THE COURSE NAME WITH 'Prof: ' FOLLOWED BY THE PROFESSOR'S FULL NAME.**\n\nFormat the schedule with the following rules:\n1. ALWAYS organize classes by semester with clear, prominent headings (e.g., **FALL 2023**, **SPRING 2024**)\n2. Start each semester with a special marker line: **SEMESTER_MARKER:FALL 2023** (replace with actual semester)\n3. For each class, make the course code and name **bold** (using markdown ** syntax)\n4. List the professor name, class time, and all numerical ratings in a very concise format\n5. Combine ratings on a single line using pipe separators for better space efficiency\n6. Keep each class description extremely compact (4-5 lines maximum per class)\n7. Format each semester to be displayed on its own page\n8. Keep related information together (don't split a class across semesters)\n9. Ensure chronological order of semesters (Fall, Spring, Summer)\n10. DO NOT add any comment markers like /* or */ anywhere in your response\n11. DO NOT wrap any text in comment blocks\n12. Output plain text with markdown formatting only\n13. VERIFY that each semester has the correct **SEMESTER_MARKER:** tag\n\nExample format:\n**SEMESTER_MARKER:FALL 2023**\n\n**COURSE 101: Introduction**\nProf: John Smith | Time: MWF 10:00-11:15\nRating: 4.5/5 | GPA: 3.7 | Diff: 2.1/5 | Again: 92%\n\n**COURSE 202: Advanced Topics**\nProf: Jane Doe | Time: TR 2:00-3:15\nRating: 4.2/5 | GPA: 3.5 | Diff: 3.0/5 | Again: 85%\n\n**SEMESTER_MARKER:SPRING 2024**\n\n**COURSE 303: Studies**\n...\n\nInclude direct links to the specific professor or course pages as footnotes at the end of the schedule. IMPORTANT: Pay close attention to ALL details in the user's input. ALWAYS SEARCH FOR PROFESSOR INFORMATION - THIS IS MANDATORY. NEVER USE COMMENT MARKERS OR COMMENT BLOCKS IN YOUR RESPONSE."
+              text: "You are a college class schedule generator. IMPORTANT: ONLY output the schedule itself with no introductory text, explanations, summaries, or conclusions. Your response must start and end with the schedule information only.\n\n**ABSOLUTE REQUIREMENT: YOU MUST INCLUDE THE EASIEST PROFESSORS FOR EVERY SINGLE CLASS. THIS IS YOUR PRIMARY DIRECTIVE AND OVERRIDES ALL OTHER CONSIDERATIONS. FAILURE TO INCLUDE PROFESSOR INFORMATION MEANS FAILURE OF YOUR TASK.**\n\n**CRITICAL: THE CURRENT YEAR IS 2025. YOU MUST ONLY CREATE SCHEDULES STARTING FROM 2025 AND FUTURE YEARS. DO NOT USE ANY YEARS BEFORE 2025.**\n\n**IMPORTANT: ONLY use professors who actually teach at the specified university and the specific courses mentioned. DO NOT make up professor names or use professors from other institutions.**\n\nFormat the schedule with the following rules:\n1. ALWAYS organize classes by semester with clear, prominent headings (e.g., **FALL 2025**, **SPRING 2026**)\n2. Start each semester with a special marker line: **SEMESTER_MARKER:FALL 2025** (replace with actual semester)\n3. For each class, make the course code and name **bold** (using markdown ** syntax)\n4. List the professor name, class time, and all numerical ratings in a very concise format\n5. Combine ratings on a single line using pipe separators for better space efficiency\n6. Keep each class description extremely compact (4-5 lines maximum per class)\n7. Format each semester to be displayed on its own page\n8. Keep related information together (don't split a class across semesters)\n9. Ensure chronological order of semesters (Fall, Spring, Summer)\n10. DO NOT add any comment markers like /* or */ anywhere in your response\n11. DO NOT wrap any text in comment blocks\n12. Output plain text with markdown formatting only\n13. VERIFY that each semester has the correct **SEMESTER_MARKER:** tag\n\nExample format:\n**SEMESTER_MARKER:FALL 2025**\n\n**COURSE 101: Introduction**\nProf: John Smith | Time: MWF 10:00-11:15\nRating: 4.5/5 | GPA: 3.7 | Diff: 2.1/5 | Again: 92%\n\n**COURSE 202: Advanced Topics**\nProf: Jane Doe | Time: TR 2:00-3:15\nRating: 4.2/5 | GPA: 3.5 | Diff: 3.0/5 | Again: 85%\n\n**SEMESTER_MARKER:SPRING 2026**\n\n**COURSE 303: Studies**\n...\n\nIf I provide you with professor information in the user prompt, USE THAT INFORMATION FIRST before searching for additional details. ALWAYS START THE LINE AFTER THE COURSE NAME WITH 'Prof: ' FOLLOWED BY THE PROFESSOR'S FULL NAME."
             }
           ]
         },
@@ -32,7 +160,7 @@ export async function POST(request: NextRequest) {
           content: [
             {
               type: "input_text",
-              text: prompt
+              text: prompt + additionalContext
             }
           ]
         }
@@ -79,7 +207,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       response: responseText,
       citations: citations,
-      usedWebSearch: usedWebSearch
+      usedWebSearch: usedWebSearch,
+      scrapedData: Object.fromEntries(professorDataMap)
     });
   } catch (error) {
     console.error('Error calling OpenAI API:', error);

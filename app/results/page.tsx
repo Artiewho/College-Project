@@ -110,6 +110,8 @@ export default function ResultsPage() {
   }, [query, mounted]);
   
   // Function to process the response and split it into semesters
+  // Add this to the processSemesters function
+  
   const processSemesters = (response: string) => {
     if (!response) return;
     
@@ -131,6 +133,16 @@ export default function ResultsPage() {
           const nextMatch = headingMatches[i + 1];
           
           const semesterTitle = currentMatch[1].trim();
+          
+          // Validate the semester year is 2025 or later
+          const yearMatch = semesterTitle.match(/(20\d{2})/);
+          const year = yearMatch ? parseInt(yearMatch[1]) : 0;
+          
+          if (year < 2025) {
+            console.warn(`Ignoring semester with year before 2025: ${semesterTitle}`);
+            continue; // Skip this semester
+          }
+          
           const startIndex = currentMatch.index + currentMatch[0].length;
           const endIndex = nextMatch ? nextMatch.index : response.length;
           
@@ -164,6 +176,16 @@ export default function ResultsPage() {
       const nextMatch = semesterMatches[i + 1];
       
       const semesterTitle = currentMatch[1].trim();
+      
+      // Validate the semester year is 2025 or later
+      const yearMatch = semesterTitle.match(/(20\d{2})/);
+      const year = yearMatch ? parseInt(yearMatch[1]) : 0;
+      
+      if (year < 2025) {
+        console.warn(`Ignoring semester with year before 2025: ${semesterTitle}`);
+        continue; // Skip this semester
+      }
+      
       const startIndex = currentMatch.index + currentMatch[0].length;
       const endIndex = nextMatch ? nextMatch.index : response.length;
       
