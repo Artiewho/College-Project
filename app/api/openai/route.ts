@@ -61,17 +61,17 @@ export async function POST(request: NextRequest) {
     const messageOutput = response.output.find(item => item.type === 'message');
     if (messageOutput && messageOutput.content && messageOutput.content.length > 0) {
       const content = messageOutput.content[0];
-      responseText = content.text || '';
+      responseText = 'text' in content ? content.text : '';
       
       // Extract citations if they exist
-      if (content.annotations && content.annotations.length > 0) {
-        citations = content.annotations
-          .filter(annotation => annotation.type === 'url_citation')
+      if ('annotations' in content && Array.isArray(content.annotations) && content.annotations.length > 0) {
+        citations = ('annotations' in content ? content.annotations : [])
+          .filter((annotation: { type: string }) => annotation.type === 'url_citation')
           .map(citation => ({
-            title: citation.title || '',
-            url: citation.url || '',
-            startIndex: citation.start_index || 0,
-            endIndex: citation.end_index || 0
+            title: (citation as any).title || '',
+            url: (citation as URLCitation).url || '',
+            startIndex: citation.startIndex || 0,
+            endIndex: citation.endIndex || 0
           }));
       }
     }

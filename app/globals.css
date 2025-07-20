@@ -886,9 +886,9 @@ body.dark-mode .error {
   font-weight: 500;
   color: #34495e;
   border-left: 3px solid #3498db;
-  padding-left: 10px !important;
+  padding-left: 10px;
   background-color: rgba(52, 152, 219, 0.05);
-  margin-bottom: 15px !important;
+  margin-bottom: 15px;
 }
 
 .dark-mode .ratings-info {
@@ -897,9 +897,9 @@ body.dark-mode .error {
   background-color: rgba(102, 178, 255, 0.1);
 }
 
-/* Remove these problematic selectors (lines 900-915) */
-.response-content p:nth-of-type(n+3):not(:has(strong)):not(:empty):contains("Rating:"),
-.semester-content p:nth-of-type(n+3):not(:has(strong)):not(:empty):contains("Rating:") {
+/* Keep only these class-based selectors */
+.response-content .ratings-info,
+.semester-content .ratings-info {
   font-weight: 500;
   color: #34495e;
   border-left: 3px solid #3498db;
@@ -908,9 +908,11 @@ body.dark-mode .error {
   margin-bottom: 15px;
 }
 
-.dark-mode .response-content p:nth-of-type(n+3):not(:has(strong)):not(:empty):contains("Rating:"),
-.dark-mode .semester-content p:nth-of-type(n+3):not(:has(strong)):not(:empty):contains("Rating:") {
+.dark-mode .response-content .ratings-info,
+.dark-mode .semester-content .ratings-info {
   color: #ecf0f1;
   border-left: 3px solid #66b2ff;
   background-color: rgba(102, 178, 255, 0.1);
 }
+
+
