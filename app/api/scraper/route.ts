@@ -11,6 +11,10 @@ interface ProfessorData {
   numRatings?: number;
   department?: string;
   url?: string;
+  course?: string; 
+  currentlyTeaching?: boolean;
+  source?: string; // Add this property to track data source
+  teachesClass?: boolean; // Explicitly indicates if professor teaches this specific class
 }
 
 /**
@@ -73,13 +77,16 @@ async function scrapeRateMyProfessor(university: string, professorName?: string,
             return againMatch ? parseInt(againMatch[1]) : undefined;
           });
           
+          // Inside the professor search section (around line 65)
           results.push({
             name,
             rating,
             difficulty,
             wouldTakeAgain,
             department,
-            url
+            url,
+            source: 'Rate My Professor',
+            teachesClass: false // By default, we don't know if they teach this specific class
           });
         }
       } else if (course) {
@@ -111,11 +118,14 @@ async function scrapeRateMyProfessor(university: string, professorName?: string,
                                        });
           
           if (teachesRelevantCourse) {
+            // Inside the course search section (around line 120)
             results.push({
               name,
               rating,
               department,
-              url
+              url,
+              source: 'Rate My Professor',
+              teachesClass: true // This professor likely teaches this class based on RMP data
             });
           }
         }
@@ -134,116 +144,151 @@ async function scrapeRateMyProfessor(university: string, professorName?: string,
  * Scrape Course Critique for professor and course information
  */
 async function scrapeCourseEval(university: string, course?: string, professorName?: string): Promise<ProfessorData[]> {
-  // This implementation will vary based on the university's course critique system
-  const browser = await chromium.launch({ headless: true });
   const results: ProfessorData[] = [];
   
   try {
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    
     // For Georgia Tech's Course Critique
-    if (university.toLowerCase().includes('georgia tech')) {
-      await page.goto('https://critique.gatech.edu/');
+    if (university.toLowerCase().includes('georgia tech') && course) {
+      // Extract course code if it's embedded in a longer string
+      const courseCode = course.match(/([A-Z]{2,4})\s*(\d{4})/i);
+      const searchTerm = courseCode ? `${courseCode[1]} ${courseCode[2]}` : course;
       
-      // If we have a specific course, search for it
-      if (course) {
-        // Extract course code if it's embedded in a longer string
-        const courseCode = course.match(/([A-Z]{2,4})\s*(\d{4})/i);
-        const searchTerm = courseCode ? `${courseCode[1]} ${courseCode[2]}` : course;
+      console.log(`Searching Course Critique API for: ${searchTerm}`);
+      
+      // Get current year and semester
+      const date = new Date();
+      const currentYear = date.getFullYear();
+      let currentSemester = '';
+      const month = date.getMonth() + 1; // JavaScript months are 0-indexed
+      
+      // Determine current semester based on month
+      if (month >= 1 && month <= 5) {
+        currentSemester = 'spring';
+      } else if (month >= 6 && month <= 7) {
+        currentSemester = 'summer';
+      } else {
+        currentSemester = 'fall';
+      }
+      
+      // First try to get current semester data from OSCAR API
+      const oscarApiUrl = `https://critique.gatech.edu/api/oscar/${courseCode[1]}/${courseCode[2]}/${currentYear}/${currentSemester}`;
+      
+      console.log(`Checking OSCAR API for current teaching professors: ${oscarApiUrl}`);
+      
+      try {
+        const oscarResponse = await fetch(oscarApiUrl);
+        const oscarData = await oscarResponse.json();
         
-        console.log(`Searching Course Critique for: ${searchTerm}`);
-        await page.fill('input[type="text"]', searchTerm);
-        await page.press('input[type="text"]', 'Enter');
-        await page.waitForTimeout(3000);
-        
-        // First, get all course sections with their average GPAs
-        const courseSections = [];
-        const sectionRows = await page.$$('.course-section-row');
-        
-        for (const row of sectionRows) {
-          const sectionName = await row.evaluate(el => el.querySelector('.course-section-name')?.textContent || '');
-          const sectionGPA = await row.evaluate(el => {
-            const gpaEl = el.querySelector('.course-section-gpa');
-            return gpaEl ? parseFloat(gpaEl.textContent || '0') : 0;
-          });
+        // If we have section data with professors
+        if (oscarData && Array.isArray(oscarData) && oscarData.length > 0) {
+          console.log(`Found ${oscarData.length} sections in current semester`);
           
-          courseSections.push({
-            name: sectionName,
-            gpa: sectionGPA
-          });
-        }
-        
-        // Sort sections by GPA (highest first)
-        courseSections.sort((a, b) => b.gpa - a.gpa);
-        
-        // Take top 3 sections with highest GPAs
-        const topSections = courseSections.slice(0, 3);
-        console.log(`Top sections by GPA: ${JSON.stringify(topSections)}`);
-        
-        // For each top section, click on it and get professor data
-        for (const section of topSections) {
-          // Click on the section to view professors
-          const sectionElement = await page.$(`text=${section.name}`);
-          if (sectionElement) {
-            await sectionElement.click();
-            await page.waitForTimeout(2000);
-            
-            // Extract professor data for this section
-            const professorRows = await page.$$('.professor-row');
-            
-            const sectionProfessors = [];
-            for (const row of professorRows) {
-              const name = await row.evaluate(el => el.querySelector('.professor-name')?.textContent || '');
-              const gpa = await row.evaluate(el => {
-                const gpaEl = el.querySelector('.professor-gpa');
-                return gpaEl ? parseFloat(gpaEl.textContent || '0') : undefined;
-              });
-              
-              // Add number of ratings if available
-              const numRatings = await row.evaluate(el => {
-                const ratingsEl = el.querySelector('.professor-ratings-count');
-                return ratingsEl ? parseInt(ratingsEl.textContent || '0') : undefined;
-              });
-              
-              sectionProfessors.push({
-                name,
-                avgGPA: gpa,
-                numRatings,
-                section: section.name,
-                course: course // Add course information
+          // Extract unique professor names from current sections
+          const currentProfessors = new Set();
+          
+          oscarData.forEach(section => {
+            if (section.instructors && Array.isArray(section.instructors)) {
+              section.instructors.forEach(instructor => {
+                currentProfessors.add(instructor);
               });
             }
+          });
+          
+          console.log(`Current teaching professors: ${Array.from(currentProfessors).join(', ')}`);
+          
+          // Now get historical GPA data from Course Critique API
+          const apiUrl = `https://c4citk6s9k.execute-api.us-east-1.amazonaws.com/test/data/course?courseID=${encodeURIComponent(searchTerm)}`;
+          
+          const response = await fetch(apiUrl);
+          const data = await response.json();
+          
+          if (data && data.raw && Array.isArray(data.raw)) {
+            // Filter professors to only include those teaching in current semester
+            const currentProfessorsList = Array.from(currentProfessors) as string[];
+            const filteredProfessors = data.raw.filter(prof => 
+              currentProfessorsList.some(currentProf => 
+                currentProf.toLowerCase().includes(prof.instructor_name.toLowerCase()) ||
+                prof.instructor_name.toLowerCase().includes(currentProf.toLowerCase())
+              )
+            );
             
             // Sort professors by GPA (highest first)
-            sectionProfessors.sort((a, b) => {
-              if (a.avgGPA !== undefined && b.avgGPA !== undefined) {
-                return b.avgGPA - a.avgGPA;
+            const sortedProfessors = [...filteredProfessors].sort((a, b) => {
+              if (a.GPA !== undefined && b.GPA !== undefined) {
+                return b.GPA - a.GPA;
               }
               return 0;
             });
             
-            // Add top professors from this section to results
-            results.push(...sectionProfessors);
+            // Take professors with highest GPAs
+            for (const prof of sortedProfessors) {
+              // Inside the OSCAR API section (around line 220)
+              results.push({
+                name: prof.instructor_name,
+                avgGPA: prof.GPA,
+                numRatings: prof.sections, // Number of sections taught
+                course: searchTerm,
+                currentlyTeaching: true,
+                source: 'Course Critique (Current Semester)',
+                teachesClass: true // This professor definitely teaches this class
+              });
+              
+              // If we found current professors, return them
+              if (results.length > 0) {
+                return results;
+              }
+            }
             
-            // Go back to search results
-            await page.goBack();
-            await page.waitForTimeout(1500);
+            // Inside the fallback section (around line 250)
+            results.push({
+              name: prof.instructor_name,
+              avgGPA: prof.GPA,
+              numRatings: prof.sections, // Number of sections taught
+              course: searchTerm,
+              currentlyTeaching: false, // Mark as not currently teaching since we're using historical data
+              source: 'Course Critique (Historical)',
+              teachesClass: false // We don't know for sure if they teach this class currently
+            });
           }
         }
-      } else {
-        // If no specific course, search for courses by major
-        // This would be used when we have major requirements but no specific course
-        // Implementation would be similar but would search for each required course
+      } catch (oscarError) {
+        console.error('Error fetching from OSCAR API:', oscarError);
+        // Continue to fallback method if OSCAR API fails
+      }
+      
+      // Fallback: Use the Course Critique API for historical data
+      console.log('Falling back to Course Critique API for historical data');
+      const apiUrl = `https://c4citk6s9k.execute-api.us-east-1.amazonaws.com/test/data/course?courseID=${encodeURIComponent(searchTerm)}`;
+      
+      const response = await fetch(apiUrl);
+      const data = await response.json();
+      
+      if (data && data.raw && Array.isArray(data.raw)) {
+        // Sort professors by GPA (highest first)
+        const sortedProfessors = [...data.raw].sort((a, b) => {
+          if (a.GPA !== undefined && b.GPA !== undefined) {
+            return b.GPA - a.GPA;
+          }
+          return 0;
+        });
+        
+        // Take top professors with highest GPAs
+        for (const prof of sortedProfessors) {
+          results.push({
+            name: prof.instructor_name,
+            avgGPA: prof.GPA,
+            numRatings: prof.sections, // Number of sections taught
+            course: searchTerm,
+            currentlyTeaching: false // Mark as not currently teaching since we're using historical data
+          });
+        }
       }
     } else {
       // Generic implementation for other universities
       console.log(`No specific implementation for university: ${university}`);
     }
   } catch (error) {
-    console.error('Error scraping Course Critique:', error);
-  } finally {
-    await browser.close();
+    console.error('Error fetching from Course Critique API:', error);
   }
   
   return results;
@@ -317,20 +362,26 @@ export async function POST(request: NextRequest) {
         courseGroups.get(course)!.push(prof);
       }
       
-      // For each course, keep only the top professors by GPA
+      // For each course, keep only the top professors by GPA who actually teach the class
       const finalResults: ProfessorData[] = [];
       
       for (const [course, professors] of courseGroups.entries()) {
-        // Sort by GPA
-        professors.sort((a, b) => {
-          if (a.avgGPA !== undefined && b.avgGPA !== undefined) {
-            return b.avgGPA - a.avgGPA;
-          }
-          return 0;
-        });
-        
-        // Take top 3 professors for each course
-        finalResults.push(...professors.slice(0, 3));
+      // First, filter professors who actually teach the class
+      const teachingProfessors = professors.filter(prof => prof.teachesClass === true);
+      
+      // If we have professors who teach the class, use only them
+      const profesToUse = teachingProfessors.length > 0 ? teachingProfessors : professors;
+      
+      // Sort by GPA
+      profesToUse.sort((a, b) => {
+        if (a.avgGPA !== undefined && b.avgGPA !== undefined) {
+          return b.avgGPA - a.avgGPA;
+        }
+        return 0;
+      });
+      
+      // Take top 3 professors for each course
+      finalResults.push(...profesToUse.slice(0, 3));
       }
       
       return NextResponse.json({
@@ -361,10 +412,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Merge results from both sources, prioritizing professors with complete information
- */
-/**
- * Merge results with priority on GPA for Georgia Tech
+ * Merge results from both sources, prioritizing GPA above all else
  */
 function mergeResultsWithGPAPriority(rmpResults: ProfessorData[], courseEvalResults: ProfessorData[]): ProfessorData[] {
   const mergedMap = new Map<string, ProfessorData>();
@@ -374,35 +422,41 @@ function mergeResultsWithGPAPriority(rmpResults: ProfessorData[], courseEvalResu
     mergedMap.set(prof.name.toLowerCase(), prof);
   }
   
-  // Merge with RMP results (secondary)
+  // Merge with RMP results (secondary) - only use RMP for professors already found in Course Critique
   for (const prof of rmpResults) {
     const key = prof.name.toLowerCase();
     if (mergedMap.has(key)) {
-      // Merge with existing entry, but preserve Course Critique GPA
+      // Merge with existing entry, but preserve Course Critique data
       const existing = mergedMap.get(key)!;
       const merged = { ...prof, ...existing };
       
-      // Ensure we keep the Course Critique GPA if it exists
+      // Ensure we keep the Course Critique data if it exists
       if (existing.avgGPA !== undefined) {
         merged.avgGPA = existing.avgGPA;
       }
+      if (existing.numRatings !== undefined) {
+        merged.numRatings = existing.numRatings;
+      }
+      // Preserve the source information from Course Critique
+      if (existing.source) {
+        merged.source = existing.source;
+      }
+      // Preserve teaching information - prioritize OSCAR API data
+      if (existing.teachesClass !== undefined) {
+        merged.teachesClass = existing.teachesClass;
+      }
       
       mergedMap.set(key, merged);
-    } else {
-      mergedMap.set(key, prof);
     }
+    // Skip professors not found in Course Critique
   }
   
-  // Convert map to array and sort primarily by GPA (highest first)
+  // Convert map to array and sort ONLY by GPA (highest first)
   return Array.from(mergedMap.values())
     .sort((a, b) => {
-      // Sort by GPA first (Georgia Tech priority)
+      // Sort by GPA only
       if (a.avgGPA !== undefined && b.avgGPA !== undefined) {
         return b.avgGPA - a.avgGPA;
-      }
-      // Then by rating if GPAs are equal or undefined
-      if (a.rating !== undefined && b.rating !== undefined) {
-        return b.rating - a.rating;
       }
       // Prioritize entries with GPA
       if (a.avgGPA !== undefined && b.avgGPA === undefined) {
