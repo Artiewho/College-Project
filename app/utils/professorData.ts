@@ -45,7 +45,7 @@ export function extractCourseCode(courseString: string): string {
 }
 
 // Generate semester sequence starting from current year (2025)
-export function generateSemesterSequence(numSemesters: number = 4): string[] {
+export function generateSemesterSequence(numSemesters: number = 8, includeSummer: boolean = false): string[] {
   const currentYear = 2025; // Hardcoded current year
   const semesters = [];
   
@@ -65,15 +65,25 @@ export function generateSemesterSequence(numSemesters: number = 4): string[] {
   let year = startYear;
   let semester = startSemester;
   
-  for (let i = 0; i < numSemesters; i++) {
+  // Count how many semesters we've added
+  let semestersAdded = 0;
+  
+  // Keep adding semesters until we reach the requested number
+  while (semestersAdded < numSemesters) {
     semesters.push(`${semester} ${year}`);
+    semestersAdded++;
     
     // Advance to next semester
     if (semester === 'FALL') {
       semester = 'SPRING';
       year += 1;
     } else if (semester === 'SPRING') {
-      semester = 'SUMMER';
+      // Skip summer unless specifically requested
+      if (includeSummer) {
+        semester = 'SUMMER';
+      } else {
+        semester = 'FALL';
+      }
     } else { // SUMMER
       semester = 'FALL';
     }

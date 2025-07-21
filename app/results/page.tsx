@@ -76,7 +76,11 @@ export default function ResultsPage() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ prompt: query }),
+          body: JSON.stringify({ 
+            prompt: query,
+            major: major,
+            university: university 
+          }),
         });
     
         if (!response.ok) {
