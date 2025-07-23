@@ -1,0 +1,2 @@
+console.log(`Using base URL: ${baseUrl}`);
+console.log(`Sending request for ${course} at ${university}`);

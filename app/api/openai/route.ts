@@ -20,6 +20,9 @@ function extractCoursesFromPrompt(prompt: string): string[] {
 async function getProfessorData(university: string, courses: string[]) {
   const professorDataMap = new Map();
   
+  // Get the base URL from environment variables or use a default
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+  
   for (const course of courses) {
     try {
       const response = await fetch('/api/scraper', {
@@ -308,10 +311,86 @@ async function getCoreEducationRequirements(university: string): Promise<string>
   }
 }
 
+// Replace the existing POST function with this updated version
+
 export async function POST(request: NextRequest) {
   try {
     const { prompt, major, university } = await request.json();
     
+    // Define the functions that can be called
+    const functions = [
+      {
+        name: "google_for_answers",
+        description: "Search Google with a query to enhance knowledge.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "The search query to send to Google"
+            }
+          },
+          required: ["query"]
+        }
+      }
+    ];
+    
+    // Check if we should use the new function calling approach
+    if (process.env.ENABLE_WEB_SEARCH === 'true') {
+      // Make the initial API call with function definitions
+      const response = await openai.chat.completions.create({
+        model: "gpt-4", // or your preferred model
+        messages: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: prompt }
+        ],
+        functions: functions,
+        function_call: "auto"
+      });
+      
+      // Check if the model wants to call a function
+      const responseMessage = response.choices[0].message;
+      
+      if (responseMessage.function_call) {
+        // The model wants to search the web
+        const functionName = responseMessage.function_call.name;
+        const functionArgs = JSON.parse(responseMessage.function_call.arguments);
+        
+        if (functionName === "google_for_answers") {
+          // Perform the web search
+          const searchResults = await searchWeb(functionArgs.query);
+          
+          // Send the search results back to the model
+          const secondResponse = await openai.chat.completions.create({
+            model: "gpt-4", // or your preferred model
+            messages: [
+              { role: "system", content: "You are a helpful assistant." },
+              { role: "user", content: prompt },
+              responseMessage,
+              { 
+                role: "function", 
+                name: "google_for_answers", 
+                content: JSON.stringify(searchResults)
+              }
+            ]
+          });
+          
+          // Return the final response
+          return NextResponse.json({
+            response: secondResponse.choices[0].message.content,
+            usedWebSearch: true
+          });
+        }
+      }
+      
+      // If no function was called, return the original response
+      return NextResponse.json({
+        response: responseMessage.content,
+        usedWebSearch: false
+      });
+    }
+    
+    // Continue with the existing implementation if web search is not enabled
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
@@ -373,7 +452,7 @@ export async function POST(request: NextRequest) {
     // Add professor information if available with stronger emphasis on school-specific professors
     if (professorDataMap.size > 0) {
       // Special handling for Georgia Tech
-      if (university.toLowerCase().includes('georgia tech')) {
+      if (extractedUniversity.toLowerCase().includes('georgia tech')) {
         additionalContext += `\nHere is information about professors for the requested courses at Georgia Tech, prioritized by highest GPA:\n`;
         
         for (const [course, professors] of professorDataMap.entries()) {
@@ -393,7 +472,7 @@ export async function POST(request: NextRequest) {
         additionalContext += `\nIMPORTANT: For Georgia Tech courses, ALWAYS prioritize professors with the highest GPA. This is the most important factor for Georgia Tech students.\n`;
       } else {
         // Standard handling for other universities
-        additionalContext += `\nHere is information about professors for the requested courses at ${university}:\n`;
+        additionalContext += `\nHere is information about professors for the requested courses at ${extractedUniversity}:\n`;
         
         for (const [course, professors] of professorDataMap.entries()) {
           additionalContext += `\n${course}:\n`;
@@ -402,15 +481,49 @@ export async function POST(request: NextRequest) {
               additionalContext += `- ${formatProfessorData(professor)}\n`;
             }
           } else {
-            additionalContext += `- No specific professor data found. Please search for professors who teach this course at ${university}.\n`;
+            additionalContext += `- No specific professor data found. Please search for professors who teach this course at ${extractedUniversity}.\n`;
           }
         }
       }
       
       // Add explicit instruction to use these professors
-      additionalContext += `\nIMPORTANT: ONLY use professors from ${university} who teach the specific courses mentioned. Do NOT make up professor names or use professors from other institutions.\n`;
+      additionalContext += `\nIMPORTANT: ONLY use professors from ${extractedUniversity} who teach the specific courses mentioned. Do NOT make up professor names or use professors from other institutions.\n`;
     }
     
+    // Update the end of the POST function to use the generateSchedule function correctly
+    
+    // Call the dedicated generateSchedule function
+    const result = await generateSchedule(prompt, additionalContext, extractedUniversity, 0);
+    
+    return NextResponse.json({
+      response: result.responseText,
+      citations: result.citations,
+      usedWebSearch: result.usedWebSearch,
+      scrapedData: Object.fromEntries(professorDataMap) // Use the original professorDataMap here
+    });
+    
+  } catch (error) {
+    console.error('Error calling OpenAI API:', error);
+    return NextResponse.json(
+      { error: 'Failed to process your request' },
+      { status: 500 }
+    );
+  }
+}
+
+// Add this function before the POST function
+
+// Add this interface at the top of the file with other imports
+interface URLCitation {
+  type: string;
+  url: string;
+  startIndex?: number;
+  endIndex?: number;
+}
+
+// Dedicated function to generate schedule with proper state management
+async function generateSchedule(prompt: string, additionalContext: string, university: string, retryCount: number = 0) {
+  try {
     // Use the Responses API with web search capability and our scraped data
     const response = await openai.responses.create({
       model: "gpt-4o", // Use a model that supports web search
@@ -423,7 +536,7 @@ export async function POST(request: NextRequest) {
               text: "You are a helpful assistant that generates class schedules for college students. Your task is to create a comprehensive 4-year class schedule based on the user's request.\n\n" +
                     "IMPORTANT INSTRUCTIONS:\n" +
                     "1. ONLY output the schedule, nothing else.\n" +
-                    "2. Include the EASIEST professors (highest GPA) for EVERY class.\n" +
+                    "2. Include the EASIEST professors (highest GPA) for EVERY class. THIS IS MANDATORY.\n" +
                     "3. Start schedules from 2025 (current year).\n" +
                     "4. ONLY use professors from the specified university.\n" +
                     "5. If core curriculum/general education requirements are provided, include ALL of these MANDATORY courses in the schedule. These are REQUIRED for ALL students regardless of major.\n" +
@@ -434,30 +547,33 @@ export async function POST(request: NextRequest) {
                     "8. VERIFICATION: Before finalizing, verify that ALL core curriculum AND major-specific required courses are included.\n\n" +
                     "FORMAT YOUR RESPONSE EXACTLY AS FOLLOWS:\n" +
                     "- For each semester, use the format: **SEMESTER_MARKER:Fall 2025** followed by the courses\n" +
-                    "- For each course: **COURSE CODE: Course Name** - Professor Name (Rating: X.X/5, GPA: X.XX)\n" +
+                    "- For each course: **COURSE CODE: Course Name** - [REAL Professor Name from COURSE CRITIQUE] (Rating: X.X/5, GPA: X.XX)\n" +
                     "- List semesters in chronological order\n" +
                     "- Include 4-5 courses per semester (typical full-time load)\n" +
-                    "- Make sure each semester is clearly separated with the SEMESTER_MARKER format\n"
-            }
-          ]
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: prompt + additionalContext
-            }
-          ]
-        }
-      ],
-      tools: [
-        {
-          type: "web_search_preview",
-          search_context_size: "high" // High detail level for better data extraction
-        }
-      ],
-      temperature: 0.7,
+                    "- Make sure each semester is clearly separated with the SEMESTER_MARKER format\n" +
+                    "- CRITICAL: ONLY use REAL professor names from COURSE CRITIQUE data provided above. DO NOT use generic placeholders or made-up names.\n" +
+                    "- VERIFICATION STEP: Before finalizing, verify that you have used REAL professor names from COURSE CRITIQUE for ALL courses.\n" +
+                    "- DOUBLE-CHECK: Ensure EVERY course has a professor name and GPA listed. This is REQUIRED.\n"
+          }
+        ]
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: prompt + additionalContext
+          }
+        ]
+      }
+    ],
+    tools: [
+      {
+        type: "web_search_preview",
+        search_context_size: "high" // High detail level for better data extraction
+      }
+    ],
+    temperature: 0.3, // Lower temperature for more consistent adherence to instructions
     });
     
     // Process the response to extract text and citations
@@ -477,6 +593,43 @@ export async function POST(request: NextRequest) {
       const content = messageOutput.content[0];
       responseText = 'text' in content ? content.text : '';
       
+      // Improved verification for professor information
+      const verifyProfessorInfo = (text: string) => {
+        // Extract all course entries
+        const courseEntries = text.match(/\*\*[A-Z]{2,4}\s*\d{4}.*?\n/g) || [];
+        
+        // Check if each course has professor information
+        const missingProfessorCourses = courseEntries.filter(entry => 
+          !entry.includes('Prof:') && !entry.includes('Professor') && !entry.includes('GPA:')
+        );
+        
+        return {
+          complete: missingProfessorCourses.length === 0,
+          missingCourses: missingProfessorCourses
+        };
+      };
+      
+      const professorVerification = verifyProfessorInfo(responseText);
+      
+      // If professor info is missing and we have professor data, regenerate the response
+      if (!professorVerification.complete && retryCount < 2) {
+        console.log('Response missing professor information for some courses, retrying...');
+        retryCount++;
+        
+        // Add stronger emphasis on including professors with specific mention of missing courses
+        additionalContext += '\n\nCRITICAL REMINDER: You MUST include real professor names with their GPA for EVERY course. This is MANDATORY.';
+        
+        if (professorVerification.missingCourses.length > 0) {
+          additionalContext += '\n\nThe following courses were missing professor information in your previous response:\n';
+          professorVerification.missingCourses.forEach(course => {
+            additionalContext += `- ${course.trim()}\n`;
+          });
+        }
+        
+        // Recursive call to regenerate
+        return await generateSchedule(prompt, additionalContext, university, retryCount);
+      }
+      
       // Extract citations if they exist
       if ('annotations' in content && Array.isArray(content.annotations) && content.annotations.length > 0) {
         citations = ('annotations' in content ? content.annotations : [])
@@ -490,17 +643,21 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    return NextResponse.json({
-      response: responseText,
-      citations: citations,
-      usedWebSearch: usedWebSearch,
-      scrapedData: Object.fromEntries(professorDataMap)
-    });
+    return {
+      responseText,
+      citations,
+      usedWebSearch,
+      professorDataMap: Object.fromEntries(new Map())
+    };
   } catch (error) {
-    console.error('Error calling OpenAI API:', error);
-    return NextResponse.json(
-      { error: 'Failed to process your request' },
-      { status: 500 }
-    );
+    console.error('Error generating schedule:', error);
+    throw error;
   }
 }
+
+return NextResponse.json({
+  response: responseText,
+  citations: citations,
+  usedWebSearch: usedWebSearch,
+  scrapedData: Object.fromEntries(professorDataMap)
+});
