@@ -311,6 +311,102 @@ async function getCoreEducationRequirements(university: string): Promise<string>
   }
 }
 
+// New function to determine required classes using OpenAI
+async function determineRequiredClasses(prompt: string, university: string, major: string | null, extractedCourses: string[]) {
+  try {
+    // Get major requirements
+    let majorRequirements = '';
+    if (major && university) {
+      console.log(`Searching for ${major} requirements at ${university}`);
+      majorRequirements = await getMajorRequirements(university, major);
+    }
+    
+    // Get core education requirements
+    let coreRequirements = '';
+    if (university) {
+      console.log(`Searching for core curriculum requirements at ${university}`);
+      coreRequirements = await getCoreEducationRequirements(university);
+    }
+    
+    // Generate semester sequence
+    const semesters = generateSemesterSequence(8, false);
+    
+    // Build context for class determination
+    let classContext = '\n\nIMPORTANT: Use ONLY the following semesters in your schedule, starting from the current year (2025):\n';
+    semesters.forEach(semester => {
+      classContext += `- ${semester}\n`;
+    });
+    classContext += '\nDo NOT use any semesters from previous years. The current year is 2025.\n';
+    
+    // Add core curriculum requirements if available
+    if (coreRequirements) {
+      classContext += coreRequirements;
+    }
+    
+    // Add major requirements
+    if (majorRequirements) {
+      classContext += majorRequirements;
+      classContext += '\n**CRITICAL INSTRUCTION: Make sure to include ALL the REQUIRED courses for this major in the schedule. These are MANDATORY for graduation. For ELECTIVE courses, always choose those with the HIGHEST GPA.**\n';
+    }
+    
+    // Use OpenAI to determine required classes
+    const response = await openai.responses.create({
+      model: "gpt-4o",
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text: "You are a helpful assistant that determines required classes for college students. Your task is to identify all necessary courses based on the user's request, major requirements, and core curriculum requirements.\n\n" +
+                    "IMPORTANT INSTRUCTIONS:\n" +
+                    "1. ONLY output a list of course codes (e.g., CS 1301, MATH 2551) that the student needs to take.\n" +
+                    "2. Include ALL required courses from core curriculum/general education requirements.\n" +
+                    "3. Include ALL required courses from major requirements.\n" +
+                    "4. Include appropriate elective courses based on the requirements.\n" +
+                    "5. If specific courses were mentioned in the user's request, include those as well.\n" +
+                    "6. Format your response as a simple comma-separated list of course codes ONLY.\n"
+            }
+          ]
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: prompt + classContext
+            }
+          ]
+        }
+      ]
+    });
+    
+    // Extract the course codes from the response
+    const messageOutput = response.output.find(item => item.type === 'message');
+    if (messageOutput && messageOutput.content && messageOutput.content.length > 0) {
+      const content = messageOutput.content[0];
+      const responseText = 'text' in content ? content.text : '';
+      
+      // Extract course codes using regex
+      const courseRegex = /([A-Z]{2,4})\s*(\d{4})/gi;
+      const matches = [...responseText.matchAll(courseRegex)];
+      const determinedCourses = matches.map(match => match[0]);
+      
+      // Combine with explicitly mentioned courses
+      const allCourses = [...new Set([...extractedCourses, ...determinedCourses])];
+      console.log(`Determined courses: ${allCourses.join(', ')}`);
+      
+      return allCourses;
+    }
+    
+    return extractedCourses;
+  } catch (error) {
+    console.error('Error determining required classes:', error);
+    return extractedCourses; // Fall back to extracted courses if there's an error
+  }
+}
+
+// Modified POST function
 export async function POST(request: NextRequest) {
   try {
     const { prompt, major, university } = await request.json();
@@ -319,80 +415,92 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
     
+    // Check if OpenAI API key is set
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OPENAI_API_KEY is not set');
+      return NextResponse.json({ error: 'OpenAI API key is not configured' }, { status: 500 });
+    }
+    
     // Extract university from the prompt if not provided explicitly
     const extractedUniversity = university || extractUniversityFromPrompt(prompt);
     console.log(`University: ${extractedUniversity}`);
     
     // Extract course codes from the prompt
-    const courses = extractCoursesFromPrompt(prompt);
-    console.log(`Extracted courses: ${courses.join(', ')}`);
+    const extractedCourses = extractCoursesFromPrompt(prompt);
+    console.log(`Extracted courses from prompt: ${extractedCourses.join(', ')}`);
     
-    // Prepare context data
-    const contextData = await prepareContextData(prompt, extractedUniversity, courses, major);
+    // STEP 1: Determine all required classes first
+    const allRequiredCourses = await determineRequiredClasses(prompt, extractedUniversity, major, extractedCourses);
+    console.log(`All required courses determined: ${allRequiredCourses.join(', ')}`);
+    
+    // STEP 2: Get professor data for all determined courses
+    let professorDataMap = new Map();
+    if (extractedUniversity && allRequiredCourses.length > 0) {
+      console.log(`Fetching professor data for ${allRequiredCourses.length} courses`);
+      professorDataMap = await getProfessorData(extractedUniversity, allRequiredCourses);
+    }
+    
+    // Get major requirements
+    let majorRequirements = '';
+    if (major && extractedUniversity) {
+      console.log(`Searching for ${major} requirements at ${extractedUniversity}`);
+      majorRequirements = await getMajorRequirements(extractedUniversity, major);
+    }
+    
+    // Get core education requirements
+    let coreRequirements = '';
+    if (extractedUniversity) {
+      console.log(`Searching for core curriculum requirements at ${extractedUniversity}`);
+      coreRequirements = await getCoreEducationRequirements(extractedUniversity);
+    }
+    
+    // Get best free electives
+    let freeElectives = '';
+    if (extractedUniversity) {
+      console.log(`Searching for best free electives at ${extractedUniversity}`);
+      freeElectives = await getBestFreeElectives(extractedUniversity);
+    }
+    
+    // Generate semester sequence
+    const semesters = generateSemesterSequence(8, false);
+    
+    // Build additional context with professor data and free electives
+    let additionalContext = buildAdditionalContext(
+      semesters,
+      coreRequirements,
+      majorRequirements,
+      professorDataMap,
+      extractedUniversity,
+      freeElectives
+    );
     
     // Generate the schedule with all context data
-    const result = await generateSchedule(prompt, contextData.additionalContext, extractedUniversity, 0);
+    const result = await generateSchedule(prompt, additionalContext, extractedUniversity, 0);
     
     return NextResponse.json({
       response: result.responseText,
       citations: result.citations,
       usedWebSearch: result.usedWebSearch,
-      scrapedData: Object.fromEntries(contextData.professorDataMap)
+      scrapedData: Object.fromEntries(professorDataMap)
     });
     
   } catch (error) {
     console.error('Error calling OpenAI API:', error);
     return NextResponse.json(
-      { error: 'Failed to process your request' },
+      { error: `Failed to process your request: ${error instanceof Error ? error.message : 'Unknown error'}` },
       { status: 500 }
     );
   }
 }
 
-// New helper function to consolidate context preparation
-async function prepareContextData(prompt: string, university: string, courses: string[], major: string | null) {
-  // Get professor data
-  let professorDataMap = new Map();
-  if (university && courses.length > 0) {
-    professorDataMap = await getProfessorData(university, courses);
-  }
-  
-  // Get major requirements
-  let majorRequirements = '';
-  if (major && university) {
-    console.log(`Searching for ${major} requirements at ${university}`);
-    majorRequirements = await getMajorRequirements(university, major);
-  }
-  
-  // Get core education requirements
-  let coreRequirements = '';
-  if (university) {
-    console.log(`Searching for core curriculum requirements at ${university}`);
-    coreRequirements = await getCoreEducationRequirements(university);
-  }
-  
-  // Generate semester sequence
-  const semesters = generateSemesterSequence(8, false);
-  
-  // Build additional context
-  let additionalContext = buildAdditionalContext(
-    semesters,
-    coreRequirements,
-    majorRequirements,
-    professorDataMap,
-    university
-  );
-  
-  return { professorDataMap, additionalContext };
-}
-
-// Helper function to build the additional context string
+// Modified helper function to build the additional context string
 function buildAdditionalContext(
   semesters: string[],
   coreRequirements: string,
   majorRequirements: string,
   professorDataMap: Map<string, any>,
-  university: string
+  university: string,
+  freeElectives: string
 ): string {
   let additionalContext = '';
   
@@ -412,6 +520,12 @@ function buildAdditionalContext(
   if (majorRequirements) {
     additionalContext += majorRequirements;
     additionalContext += '\n**CRITICAL INSTRUCTION: Make sure to include ALL the REQUIRED courses for this major in the schedule. These are MANDATORY for graduation. For ELECTIVE courses, always choose those with the HIGHEST GPA.**\n';
+  }
+  
+  // Add free electives information
+  if (freeElectives) {
+    additionalContext += freeElectives;
+    additionalContext += '\n**IMPORTANT: For any free elective slots in the schedule, ALWAYS use the electives with the HIGHEST GPA listed above.**\n';
   }
   
   // Add professor information
