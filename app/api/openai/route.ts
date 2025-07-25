@@ -311,86 +311,10 @@ async function getCoreEducationRequirements(university: string): Promise<string>
   }
 }
 
-// Replace the existing POST function with this updated version
-
 export async function POST(request: NextRequest) {
   try {
     const { prompt, major, university } = await request.json();
     
-    // Define the functions that can be called
-    const functions = [
-      {
-        name: "google_for_answers",
-        description: "Search Google with a query to enhance knowledge.",
-        parameters: {
-          type: "object",
-          properties: {
-            query: {
-              type: "string",
-              description: "The search query to send to Google"
-            }
-          },
-          required: ["query"]
-        }
-      }
-    ];
-    
-    // Check if we should use the new function calling approach
-    if (process.env.ENABLE_WEB_SEARCH === 'true') {
-      // Make the initial API call with function definitions
-      const response = await openai.chat.completions.create({
-        model: "gpt-4", // or your preferred model
-        messages: [
-          { role: "system", content: "You are a helpful assistant." },
-          { role: "user", content: prompt }
-        ],
-        functions: functions,
-        function_call: "auto"
-      });
-      
-      // Check if the model wants to call a function
-      const responseMessage = response.choices[0].message;
-      
-      if (responseMessage.function_call) {
-        // The model wants to search the web
-        const functionName = responseMessage.function_call.name;
-        const functionArgs = JSON.parse(responseMessage.function_call.arguments);
-        
-        if (functionName === "google_for_answers") {
-          // Perform the web search
-          const searchResults = await searchWeb(functionArgs.query);
-          
-          // Send the search results back to the model
-          const secondResponse = await openai.chat.completions.create({
-            model: "gpt-4", // or your preferred model
-            messages: [
-              { role: "system", content: "You are a helpful assistant." },
-              { role: "user", content: prompt },
-              responseMessage,
-              { 
-                role: "function", 
-                name: "google_for_answers", 
-                content: JSON.stringify(searchResults)
-              }
-            ]
-          });
-          
-          // Return the final response
-          return NextResponse.json({
-            response: secondResponse.choices[0].message.content,
-            usedWebSearch: true
-          });
-        }
-      }
-      
-      // If no function was called, return the original response
-      return NextResponse.json({
-        response: responseMessage.content,
-        usedWebSearch: false
-      });
-    }
-    
-    // Continue with the existing implementation if web search is not enabled
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
@@ -403,103 +327,17 @@ export async function POST(request: NextRequest) {
     const courses = extractCoursesFromPrompt(prompt);
     console.log(`Extracted courses: ${courses.join(', ')}`);
     
-    // Get professor data for the courses if university is specified
-    let professorDataMap = new Map();
-    if (extractedUniversity && courses.length > 0) {
-      professorDataMap = await getProfessorData(extractedUniversity, courses);
-    }
+    // Prepare context data
+    const contextData = await prepareContextData(prompt, extractedUniversity, courses, major);
     
-    // Get major requirements if major and university are specified
-    let majorRequirements = '';
-    if (major && extractedUniversity) {
-      console.log(`Searching for ${major} requirements at ${extractedUniversity}`);
-      majorRequirements = await getMajorRequirements(extractedUniversity, major);
-    }
-    
-    // Get core education requirements if university is specified
-    let coreRequirements = '';
-    if (extractedUniversity) {
-      console.log(`Searching for core curriculum requirements at ${extractedUniversity}`);
-      coreRequirements = await getCoreEducationRequirements(extractedUniversity);
-    }
-    
-    // Generate semester sequence starting from current year (2025)
-    // Don't include summer semesters by default
-    const semesters = generateSemesterSequence(8, false); // Generate 8 semesters (4 years) without summer
-    
-    // Prepare additional context for OpenAI based on scraped data and semester information
-    let additionalContext = '';
-    
-    // Add semester information
-    additionalContext += '\n\nIMPORTANT: Use ONLY the following semesters in your schedule, starting from the current year (2025):\n';
-    semesters.forEach(semester => {
-      additionalContext += `- ${semester}\n`;
-    });
-    additionalContext += '\nDo NOT use any semesters from previous years. The current year is 2025.\n';
-    
-    // Add core curriculum requirements if available
-    if (coreRequirements) {
-      additionalContext += coreRequirements;
-    }
-    
-    // Add major requirements information if available with stronger emphasis on required vs elective distinction
-    if (majorRequirements) {
-      additionalContext += majorRequirements;
-      additionalContext += '\n**CRITICAL INSTRUCTION: Make sure to include ALL the REQUIRED courses for this major in the schedule. These are MANDATORY for graduation. For ELECTIVE courses, always choose those with the HIGHEST GPA.**\n';
-      additionalContext += '\n**VERIFICATION STEP: Before finalizing your schedule, verify that ALL required courses are included.**\n';
-    }
-    
-    // Add professor information if available with stronger emphasis on school-specific professors
-    if (professorDataMap.size > 0) {
-      // Special handling for Georgia Tech
-      if (extractedUniversity.toLowerCase().includes('georgia tech')) {
-        additionalContext += `\nHere is information about professors for the requested courses at Georgia Tech, prioritized by highest GPA:\n`;
-        
-        for (const [course, professors] of professorDataMap.entries()) {
-          additionalContext += `\n${course}:\n`;
-          if (professors.length > 0) {
-            // For Georgia Tech, emphasize that these are sorted by GPA
-            additionalContext += `(Professors below are sorted by highest average GPA)\n`;
-            for (const professor of professors.slice(0, 5)) { // Show more professors for Georgia Tech
-              additionalContext += `- ${formatProfessorData(professor)}\n`;
-            }
-          } else {
-            additionalContext += `- No specific professor data found. Please search for professors who teach this course at Georgia Tech.\n`;
-          }
-        }
-        
-        // Add explicit instruction to prioritize GPA for Georgia Tech
-        additionalContext += `\nIMPORTANT: For Georgia Tech courses, ALWAYS prioritize professors with the highest GPA. This is the most important factor for Georgia Tech students.\n`;
-      } else {
-        // Standard handling for other universities
-        additionalContext += `\nHere is information about professors for the requested courses at ${extractedUniversity}:\n`;
-        
-        for (const [course, professors] of professorDataMap.entries()) {
-          additionalContext += `\n${course}:\n`;
-          if (professors.length > 0) {
-            for (const professor of professors.slice(0, 3)) { // Top 3 professors
-              additionalContext += `- ${formatProfessorData(professor)}\n`;
-            }
-          } else {
-            additionalContext += `- No specific professor data found. Please search for professors who teach this course at ${extractedUniversity}.\n`;
-          }
-        }
-      }
-      
-      // Add explicit instruction to use these professors
-      additionalContext += `\nIMPORTANT: ONLY use professors from ${extractedUniversity} who teach the specific courses mentioned. Do NOT make up professor names or use professors from other institutions.\n`;
-    }
-    
-    // Update the end of the POST function to use the generateSchedule function correctly
-    
-    // Call the dedicated generateSchedule function
-    const result = await generateSchedule(prompt, additionalContext, extractedUniversity, 0);
+    // Generate the schedule with all context data
+    const result = await generateSchedule(prompt, contextData.additionalContext, extractedUniversity, 0);
     
     return NextResponse.json({
       response: result.responseText,
       citations: result.citations,
       usedWebSearch: result.usedWebSearch,
-      scrapedData: Object.fromEntries(professorDataMap) // Use the original professorDataMap here
+      scrapedData: Object.fromEntries(contextData.professorDataMap)
     });
     
   } catch (error) {
@@ -511,7 +349,92 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Add this function before the POST function
+// New helper function to consolidate context preparation
+async function prepareContextData(prompt: string, university: string, courses: string[], major: string | null) {
+  // Get professor data
+  let professorDataMap = new Map();
+  if (university && courses.length > 0) {
+    professorDataMap = await getProfessorData(university, courses);
+  }
+  
+  // Get major requirements
+  let majorRequirements = '';
+  if (major && university) {
+    console.log(`Searching for ${major} requirements at ${university}`);
+    majorRequirements = await getMajorRequirements(university, major);
+  }
+  
+  // Get core education requirements
+  let coreRequirements = '';
+  if (university) {
+    console.log(`Searching for core curriculum requirements at ${university}`);
+    coreRequirements = await getCoreEducationRequirements(university);
+  }
+  
+  // Generate semester sequence
+  const semesters = generateSemesterSequence(8, false);
+  
+  // Build additional context
+  let additionalContext = buildAdditionalContext(
+    semesters,
+    coreRequirements,
+    majorRequirements,
+    professorDataMap,
+    university
+  );
+  
+  return { professorDataMap, additionalContext };
+}
+
+// Helper function to build the additional context string
+function buildAdditionalContext(
+  semesters: string[],
+  coreRequirements: string,
+  majorRequirements: string,
+  professorDataMap: Map<string, any>,
+  university: string
+): string {
+  let additionalContext = '';
+  
+  // Add semester information
+  additionalContext += '\n\nIMPORTANT: Use ONLY the following semesters in your schedule, starting from the current year (2025):\n';
+  semesters.forEach(semester => {
+    additionalContext += `- ${semester}\n`;
+  });
+  additionalContext += '\nDo NOT use any semesters from previous years. The current year is 2025.\n';
+  
+  // Add core curriculum requirements if available
+  if (coreRequirements) {
+    additionalContext += coreRequirements;
+  }
+  
+  // Add major requirements
+  if (majorRequirements) {
+    additionalContext += majorRequirements;
+    additionalContext += '\n**CRITICAL INSTRUCTION: Make sure to include ALL the REQUIRED courses for this major in the schedule. These are MANDATORY for graduation. For ELECTIVE courses, always choose those with the HIGHEST GPA.**\n';
+  }
+  
+  // Add professor information
+  if (professorDataMap.size > 0) {
+    additionalContext += `\nHere is information about professors for the requested courses at ${university}:\n`;
+    
+    for (const [course, professors] of professorDataMap.entries()) {
+      additionalContext += `\n${course}:\n`;
+      if (professors.length > 0) {
+        additionalContext += `(Professors below are sorted by highest average GPA)\n`;
+        for (const professor of professors.slice(0, 5)) {
+          additionalContext += `- ${formatProfessorData(professor)}\n`;
+        }
+      } else {
+        additionalContext += `- No specific professor data found.\n`;
+      }
+    }
+    
+    additionalContext += `\nIMPORTANT: ONLY use professors from ${university} who teach the specific courses mentioned. Do NOT make up professor names.\n`;
+  }
+  
+  return additionalContext;
+}
 
 // Add this interface at the top of the file with other imports
 interface URLCitation {
@@ -654,10 +577,3 @@ async function generateSchedule(prompt: string, additionalContext: string, unive
     throw error;
   }
 }
-
-return NextResponse.json({
-  response: responseText,
-  citations: citations,
-  usedWebSearch: usedWebSearch,
-  scrapedData: Object.fromEntries(professorDataMap)
-});

@@ -204,7 +204,9 @@ export default function Home() {
   };
 
   // Only render the component client-side to avoid hydration issues
-  if (!mounted) return null;
+  if (!mounted) {
+    return null; // Return empty on server-side rendering
+  }
 
   return (
     <div className="search-container">

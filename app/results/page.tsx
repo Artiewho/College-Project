@@ -66,17 +66,18 @@ export default function ResultsPage() {
     if (!mounted || !query) return;
 
     const fetchAiResponse = async () => {
+      if (!query || !mounted) return;
+      
+      setLoading(true);
+      setError(null);
+      
       try {
-        setLoading(true);
-        setError(null);
-        setIsProcessed(false); // Reset processed state
-        
         const response = await fetch('/api/openai', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             prompt: query,
             major: major,
             university: university 
@@ -84,10 +85,21 @@ export default function ResultsPage() {
         });
     
         if (!response.ok) {
-          throw new Error(`Error: ${response.status}`);
+          // Try to get more detailed error information
+          try {
+            const errorData = await response.json();
+            throw new Error(`Error ${response.status}: ${errorData.error || response.statusText}`);
+          } catch (jsonError) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+          }
         }
     
         const data = await response.json();
+        
+        if (!data.response) {
+          throw new Error('Received empty response from server');
+        }
+        
         setAiResponse(data.response);
     
         // Check if web search was used
@@ -104,7 +116,7 @@ export default function ResultsPage() {
         processSemesters(data.response);
       } catch (err) {
         console.error('Error fetching AI response:', err);
-        setError('Failed to get AI response. Please try again.');
+        setError(`Failed to get AI response: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setLoading(false);
       }
@@ -114,56 +126,25 @@ export default function ResultsPage() {
   }, [query, mounted]);
   
   // Function to process the response and split it into semesters
-  // Add this to the processSemesters function
-  
+  // Simplified semester processing function
   const processSemesters = (response: string) => {
     if (!response) return;
     
-    // Split the response by semester markers
+    // Try to find semester markers first (preferred format)
     const semesterMarkerRegex = /\*\*SEMESTER_MARKER:([^*]+)\*\*/g;
     const semesterMatches = [...response.matchAll(semesterMarkerRegex)];
     
+    // If no markers found, try headings
     if (semesterMatches.length === 0) {
-      // If no semester markers found, try to identify semesters by headings
       const semesterHeadingRegex = /\*\*([^*]*(?:FALL|SPRING|SUMMER|WINTER)[^*]*)\*\*/g;
       const headingMatches = [...response.matchAll(semesterHeadingRegex)];
       
       if (headingMatches.length > 0) {
-        // Process using heading matches
-        const extractedSemesters: SemesterData[] = [];
-        
-        for (let i = 0; i < headingMatches.length; i++) {
-          const currentMatch = headingMatches[i];
-          const nextMatch = headingMatches[i + 1];
-          
-          const semesterTitle = currentMatch[1].trim();
-          
-          // Validate the semester year is 2025 or later
-          const yearMatch = semesterTitle.match(/(20\d{2})/);
-          const year = yearMatch ? parseInt(yearMatch[1]) : 0;
-          
-          if (year < 2025) {
-            console.warn(`Ignoring semester with year before 2025: ${semesterTitle}`);
-            continue; // Skip this semester
-          }
-          
-          const startIndex = currentMatch.index + currentMatch[0].length;
-          const endIndex = nextMatch ? nextMatch.index : response.length;
-          
-          const semesterContent = response.substring(startIndex, endIndex).trim();
-          
-          extractedSemesters.push({
-            title: semesterTitle,
-            content: `**${semesterTitle}**\n\n${semesterContent}`
-          });
-        }
-        
-        setSemesters(extractedSemesters);
-        setIsProcessed(true);
+        processSemestersByMatches(headingMatches, response);
         return;
       }
       
-      // If still no matches, treat the entire response as one semester
+      // If still no matches, use entire response
       setSemesters([{
         title: 'Schedule',
         content: response
@@ -172,22 +153,26 @@ export default function ResultsPage() {
       return;
     }
     
+    processSemestersByMatches(semesterMatches, response);
+  };
+  
+  // Helper function to process semesters by regex matches
+  const processSemestersByMatches = (matches: RegExpMatchArray[], response: string) => {
     const extractedSemesters: SemesterData[] = [];
     
-    // Process each semester
-    for (let i = 0; i < semesterMatches.length; i++) {
-      const currentMatch = semesterMatches[i];
-      const nextMatch = semesterMatches[i + 1];
+    for (let i = 0; i < matches.length; i++) {
+      const currentMatch = matches[i];
+      const nextMatch = matches[i + 1];
       
       const semesterTitle = currentMatch[1].trim();
       
-      // Validate the semester year is 2025 or later
+      // Validate year is 2025 or later
       const yearMatch = semesterTitle.match(/(20\d{2})/);
       const year = yearMatch ? parseInt(yearMatch[1]) : 0;
       
       if (year < 2025) {
         console.warn(`Ignoring semester with year before 2025: ${semesterTitle}`);
-        continue; // Skip this semester
+        continue;
       }
       
       const startIndex = currentMatch.index + currentMatch[0].length;
@@ -361,7 +346,9 @@ export default function ResultsPage() {
   }, [currentSemesterIndex, isProcessed, mounted]);
 
   // Only render the component client-side to avoid hydration issues
-  if (!mounted) return null;
+  if (!mounted) {
+    return null; // Return empty on server-side rendering
+  }
 
   return (
     <div className="results-container">
