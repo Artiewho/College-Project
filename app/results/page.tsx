@@ -3,7 +3,7 @@
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { FaSearch, FaLink, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
+import { FaSearch, FaLink, FaArrowLeft, FaArrowRight, FaBug, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 interface Citation {
   title: string;
@@ -15,6 +15,13 @@ interface Citation {
 interface SemesterData {
   title: string;
   content: string;
+}
+
+interface DebugData {
+  professorData?: any;
+  scrapingLogs?: string[];
+  rawData?: any;
+  timestamp?: string;
 }
 
 export default function ResultsPage() {
@@ -37,6 +44,11 @@ export default function ResultsPage() {
   const sliderRef = useRef<HTMLDivElement>(null);
   const startX = useRef(0);
   const isDragging = useRef(false);
+
+  // Debug data state
+  const [debugData, setDebugData] = useState<DebugData>({});
+  const [showDebugData, setShowDebugData] = useState(false);
+  const [debugLoading, setDebugLoading] = useState(false);
 
   // Initialize component
   useEffect(() => {
@@ -111,6 +123,11 @@ export default function ResultsPage() {
         if (data.citations && data.citations.length > 0) {
           setCitations(data.citations);
         }
+
+        // Store debug data if available
+        if (data.debugData) {
+          setDebugData(data.debugData);
+        }
         
         // Process the response to extract semesters
         processSemesters(data.response);
@@ -124,6 +141,49 @@ export default function ResultsPage() {
 
     fetchAiResponse();
   }, [query, mounted]);
+
+  // Function to fetch debug data from scraper
+  const fetchDebugData = async () => {
+    if (!query || !university) return;
+    
+    setDebugLoading(true);
+    
+    try {
+      const response = await fetch('/api/debug-scraper', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: query,
+          university: university,
+          courses: extractCoursesFromQuery(query)
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Debug fetch failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setDebugData(data);
+      
+    } catch (err) {
+      console.error('Error fetching debug data:', err);
+      setDebugData({
+        scrapingLogs: [`Error fetching debug data: ${err instanceof Error ? err.message : 'Unknown error'}`],
+        timestamp: new Date().toISOString()
+      });
+    } finally {
+      setDebugLoading(false);
+    }
+  };
+
+  // Helper function to extract courses from query
+  const extractCoursesFromQuery = (query: string): string[] => {
+    const courseRegex = /\b[A-Z]{2,4}\s*\d{4}\b/g;
+    return query.match(courseRegex) || [];
+  };
   
   // Function to process the response and split it into semesters
   // Simplified semester processing function
@@ -203,47 +263,46 @@ export default function ResultsPage() {
     const handleTouchMove = (e: TouchEvent | MouseEvent) => {
       if (!isDragging.current) return;
       e.preventDefault();
+    };
+
+    const handleTouchEnd = (e: TouchEvent | MouseEvent) => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
       
-      const currentX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
-      const diff = startX.current - currentX;
+      const endX = 'changedTouches' in e ? e.changedTouches[0].clientX : (e as MouseEvent).clientX;
+      const diffX = startX.current - endX;
       
-      // Determine swipe direction based on threshold
-      if (Math.abs(diff) > 50) {
-        if (diff > 0 && currentSemesterIndex < semesters.length - 1) {
-          // Swipe left - go to next semester
-          setCurrentSemesterIndex(currentSemesterIndex + 1);
-        } else if (diff < 0 && currentSemesterIndex > 0) {
-          // Swipe right - go to previous semester
-          setCurrentSemesterIndex(currentSemesterIndex - 1);
+      // Minimum swipe distance
+      if (Math.abs(diffX) > 50) {
+        if (diffX > 0) {
+          // Swiped left - go to next semester
+          goToNextSemester();
+        } else {
+          // Swiped right - go to previous semester
+          goToPreviousSemester();
         }
-        isDragging.current = false;
       }
     };
 
-    const handleTouchEnd = () => {
-      isDragging.current = false;
-    };
-
-    // Add event listeners
-    slider.addEventListener('touchstart', handleTouchStart as EventListener);
-    slider.addEventListener('touchmove', handleTouchMove as EventListener);
-    slider.addEventListener('touchend', handleTouchEnd);
-    slider.addEventListener('mousedown', handleTouchStart as EventListener);
-    slider.addEventListener('mousemove', handleTouchMove as EventListener);
+    // Add event listeners for both touch and mouse events
+    slider.addEventListener('touchstart', handleTouchStart, { passive: false });
+    slider.addEventListener('touchmove', handleTouchMove, { passive: false });
+    slider.addEventListener('touchend', handleTouchEnd, { passive: false });
+    
+    slider.addEventListener('mousedown', handleTouchStart);
+    slider.addEventListener('mousemove', handleTouchMove);
     slider.addEventListener('mouseup', handleTouchEnd);
-    slider.addEventListener('mouseleave', handleTouchEnd);
 
-    // Clean up event listeners
     return () => {
-      slider.removeEventListener('touchstart', handleTouchStart as EventListener);
-      slider.removeEventListener('touchmove', handleTouchMove as EventListener);
+      slider.removeEventListener('touchstart', handleTouchStart);
+      slider.removeEventListener('touchmove', handleTouchMove);
       slider.removeEventListener('touchend', handleTouchEnd);
-      slider.removeEventListener('mousedown', handleTouchStart as EventListener);
-      slider.removeEventListener('mousemove', handleTouchMove as EventListener);
+      
+      slider.removeEventListener('mousedown', handleTouchStart);
+      slider.removeEventListener('mousemove', handleTouchMove);
       slider.removeEventListener('mouseup', handleTouchEnd);
-      slider.removeEventListener('mouseleave', handleTouchEnd);
     };
-  }, [currentSemesterIndex, semesters.length]);
+  }, []);
 
   // Function to navigate to the next semester
   const goToNextSemester = () => {
@@ -449,6 +508,101 @@ export default function ResultsPage() {
           )}
         </div>
       )}
+
+      {/* Debug Data Section */}
+      <div className="debug-section">
+        <div className="debug-header">
+          <button 
+            onClick={() => setShowDebugData(!showDebugData)}
+            className="debug-toggle-button"
+          >
+            <FaBug /> 
+            {showDebugData ? <FaEyeSlash /> : <FaEye />}
+            {showDebugData ? 'Hide' : 'Show'} Scraped Data Debug
+          </button>
+          
+          {!showDebugData && (
+            <button 
+              onClick={fetchDebugData}
+              disabled={debugLoading}
+              className="debug-fetch-button"
+            >
+              {debugLoading ? 'Fetching...' : 'Fetch Fresh Debug Data'}
+            </button>
+          )}
+        </div>
+
+        {showDebugData && (
+          <div className="debug-content">
+            <div className="debug-controls">
+              <button 
+                onClick={fetchDebugData}
+                disabled={debugLoading}
+                className="debug-refresh-button"
+              >
+                {debugLoading ? 'Fetching...' : 'Refresh Debug Data'}
+              </button>
+            </div>
+
+            {debugLoading && (
+              <div className="debug-loading">
+                <div className="loading-spinner">Fetching debug data...</div>
+              </div>
+            )}
+
+            {debugData.timestamp && (
+              <div className="debug-timestamp">
+                Last updated: {new Date(debugData.timestamp).toLocaleString()}
+              </div>
+            )}
+
+            {/* Professor Data Section */}
+            {debugData.professorData && (
+              <div className="debug-section-item">
+                <h3>🎓 Professor Data</h3>
+                <div className="debug-data-container">
+                  <pre className="debug-json">
+                    {JSON.stringify(debugData.professorData, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            )}
+
+            {/* Scraping Logs Section */}
+            {debugData.scrapingLogs && debugData.scrapingLogs.length > 0 && (
+              <div className="debug-section-item">
+                <h3>📝 Scraping Logs</h3>
+                <div className="debug-logs">
+                  {debugData.scrapingLogs.map((log, index) => (
+                    <div key={index} className="debug-log-entry">
+                      {log}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Raw Data Section */}
+            {debugData.rawData && (
+              <div className="debug-section-item">
+                <h3>🔍 Raw Scraped Data</h3>
+                <div className="debug-data-container">
+                  <pre className="debug-json">
+                    {JSON.stringify(debugData.rawData, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            )}
+
+            {/* No Debug Data Message */}
+            {!debugLoading && !debugData.professorData && !debugData.scrapingLogs && !debugData.rawData && (
+              <div className="debug-no-data">
+                <p>No debug data available. Click "Fetch Fresh Debug Data" to see what Playwright is scraping.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
